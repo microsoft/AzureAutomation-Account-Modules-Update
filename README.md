@@ -1,5 +1,14 @@
+# Updating Azure PowerShell modules in Azure Automation accounts
 
-# Contributing
+## Purpose
+
+This Azure Automation runbook updates Azure PowerShell modules imported into an Azure Automation
+account with the module versions published to the PowerShell Gallery. See
+[How to update Azure PowerShell modules in Azure Automation](https://docs.microsoft.com/en-us/azure/automation/automation-update-azure-modules)
+for more details.
+
+
+## Contributing
 
 This project welcomes contributions and suggestions.  Most contributions require you to agree to a
 Contributor License Agreement (CLA) declaring that you have the right to, and actually do, grant us
