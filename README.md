@@ -11,6 +11,26 @@ for more details.
 
 Import this runbook into your Automation account, and [start](https://docs.microsoft.com/en-us/azure/automation/automation-starting-a-runbook) it as a regular Automation runbook.
 
+## Notes
+
+* If you import this runbook with the original name (**Update-AutomationAzureModulesForAccount**),
+  it will override the internal runbook with this name. As a result, the imported runbook will
+  run when the **Update Azure Modules** button is pushed or when this runbook is invoked directly
+  via ARM API for this Automation account. If this is not what you want, specify a different name
+  when importing this runbook.
+* Only **Azure** and **AzureRM.\*** modules are currently supported. The new [Azure PowerShell Az modules](https://docs.microsoft.com/en-us/powershell/azure/new-azureps-module-az) are not supported yet.
+  Avoid starting this runbook on Automation accounts that contain Az modules.
+* Before starting this runbook, make sure your Automation account has an [Azure Run As account credential](https://docs.microsoft.com/en-us/azure/automation/manage-runas-account) created.
+* You can use this code as a regular PowerShell script instead of a runbook: just login to Azure
+  using the [Connect-AzureRmAccount](https://docs.microsoft.com/en-us/powershell/module/azurerm.profile/connect-azurermaccount)
+  command first, then pass `-Login $false` to the script.
+* To use this runbook on the sovereign clouds, provide the appropriate value to the `AzureEnvironment`
+  parameter. Please also make sure you read the
+  [compatibility notes](https://docs.microsoft.com/en-us/azure/automation/automation-update-azure-modules#alternative-ways-to-update-your-modules).
+* When facing compatibility issues, you may want to use specific older module versions instead of
+  the latest available on the PowerShell Gallery. In this case, provide the required versions in
+  the `ModuleVersionOverrides` parameter.
+
 ## Contributing
 
 This project welcomes contributions and suggestions.  Most contributions require you to agree to a
