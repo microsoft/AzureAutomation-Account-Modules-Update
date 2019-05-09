@@ -68,6 +68,10 @@ $ErrorActionPreference = "Continue"
 
 $script:AzureRMProfileModuleName = "AzureRM.Profile"
 $script:AzureRMAutomationModuleName = "AzureRM.Automation"
+
+$script:AzAccountsModuleName = "Az.Accounts"
+$script:AzAutomationModuleName = "Az.Automation"
+
 $script:AzureSdkOwnerName = "azure-sdk"
 
 #endregion
@@ -368,9 +372,9 @@ function Import-ModulesInAutomationAccordingToDependency([string[][]] $ModuleImp
     }
 }
 
-function Update-ProfileAndAutomationVersionToLatest {
+function Update-ProfileAndAutomationVersionToLatest([string] $AutomationModuleName) {
     # Get the latest azure automation module version 
-    $VersionAndDependencies = Get-ModuleDependencyAndLatestVersion $script:AzureRMAutomationModuleName
+    $VersionAndDependencies = Get-ModuleDependencyAndLatestVersion $AutomationModuleName
 
     # Automation only has dependency on profile
     $ModuleDependencies = GetModuleNameAndVersionFromPowershellGalleryDependencyFormat $VersionAndDependencies[1]
@@ -386,9 +390,9 @@ function Update-ProfileAndAutomationVersionToLatest {
     $WebClient.DownloadFile($ProfileURL, $ProfilePath)
 
     # Download AzureRM.Automation to temp location
-    $ModuleContentUrl = Get-ModuleContentUrl $script:AzureRMAutomationModuleName
+    $ModuleContentUrl = Get-ModuleContentUrl $AutomationModuleName
     $AutomationURL = (Invoke-WebRequest -Uri $ModuleContentUrl -MaximumRedirection 0 -UseBasicParsing -ErrorAction Ignore).Headers.Location
-    $AutomationPath = Join-Path $env:TEMP ($script:AzureRMAutomationModuleName + ".zip")
+    $AutomationPath = Join-Path $env:TEMP ($AutomationModuleName + ".zip")
     $WebClient.DownloadFile($AutomationURL, $AutomationPath)
 
     # Create folder for unzipping the Module files
@@ -398,12 +402,12 @@ function Update-ProfileAndAutomationVersionToLatest {
     # Unzip files
     $ProfileUnzipPath = Join-Path $PathFolder $ProfileModuleName
     Expand-Archive -Path $ProfilePath -DestinationPath $ProfileUnzipPath -Force
-    $AutomationUnzipPath = Join-Path $PathFolder $script:AzureRMAutomationModuleName
+    $AutomationUnzipPath = Join-Path $PathFolder $AutomationModuleName
     Expand-Archive -Path $AutomationPath -DestinationPath $AutomationUnzipPath -Force
 
     # Import modules
-    Import-Module (Join-Path $ProfileUnzipPath "AzureRM.Profile.psd1") -Force -Verbose
-    Import-Module (Join-Path $AutomationUnzipPath "AzureRM.Automation.psd1") -Force -Verbose
+    Import-Module (Join-Path $ProfileUnzipPath ($ProfileModuleName + ".psd1")) -Force -Verbose
+    Import-Module (Join-Path $AutomationUnzipPath ($AutomationModuleName + ".psd1")) -Force -Verbose
 }
 
 #endregion
@@ -417,7 +421,7 @@ if ($ModuleVersionOverrides) {
 }
 
 # Import the latest version of the Azure automation and profile version to the local sandbox
-Update-ProfileAndAutomationVersionToLatest 
+Update-ProfileAndAutomationVersionToLatest($script:AzureRMAutomationModuleName)
 
 if ($Login) {
     Login-AzureAutomation
