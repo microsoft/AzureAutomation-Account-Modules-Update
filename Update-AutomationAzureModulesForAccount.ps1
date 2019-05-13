@@ -24,6 +24,8 @@ The Azure Automation account name.
 
 .PARAMETER AzureModuleClass
 (Optional) The class of module that will be updated (AzureRM or Az)
+If set to Az, this script will rely on only Az modules to update other modules.
+Set this to Az if your runbook contains only Az modules to avoid conflicts.
 
 .PARAMETER AzureEnvironment
 (Optional) Azure environment name.
@@ -73,9 +75,13 @@ $ErrorActionPreference = "Continue"
 
 $script:AzureRMProfileModuleName = "AzureRM.Profile"
 $script:AzureRMAutomationModuleName = "AzureRM.Automation"
+$script:GetAzureRmAutomationModule = "Get-AzureRmAutomationModule"
+$script:NewAzureRmAutomationModule = "New-AzureRmAutomationModule"
 
 $script:AzAccountsModuleName = "Az.Accounts"
 $script:AzAutomationModuleName = "Az.Automation"
+$script:GetAzAutomationModule = "Get-AzAutomationModule"
+$script:NewAzAutomationModule = "New-AzAutomationModule"
 
 $script:AzureSdkOwnerName = "azure-sdk"
 
@@ -99,18 +105,30 @@ function ConvertJsonDictTo-HashTable($JsonString) {
 }
 
 # Use the Run As connection to login to Azure
-function Login-AzureAutomation {
+function Login-AzureAutomation([bool] $AzModuleOnly) {
     try {
         $RunAsConnection = Get-AutomationConnection -Name "AzureRunAsConnection"
         Write-Output "Logging in to Azure ($AzureEnvironment)..."
-        Add-AzureRmAccount `
-            -ServicePrincipal `
-            -TenantId $RunAsConnection.TenantId `
-            -ApplicationId $RunAsConnection.ApplicationId `
-            -CertificateThumbprint $RunAsConnection.CertificateThumbprint `
-            -Environment $AzureEnvironment
 
-        Select-AzureRmSubscription -SubscriptionId $RunAsConnection.SubscriptionID  | Write-Verbose
+        if ($AzModuleOnly) {
+            Add-AzAccount `
+                -ServicePrincipal `
+                -TenantId $RunAsConnection.TenantId `
+                -ApplicationId $RunAsConnection.ApplicationId `
+                -CertificateThumbprint $RunAsConnection.CertificateThumbprint `
+                -Environment $AzureEnvironment
+
+            Select-AzSubscription -SubscriptionId $RunAsConnection.SubscriptionID  | Write-Verbose
+        } else {
+            Add-AzureRmAccount `
+                -ServicePrincipal `
+                -TenantId $RunAsConnection.TenantId `
+                -ApplicationId $RunAsConnection.ApplicationId `
+                -CertificateThumbprint $RunAsConnection.CertificateThumbprint `
+                -Environment $AzureEnvironment
+
+            Select-AzureRmSubscription -SubscriptionId $RunAsConnection.SubscriptionID  | Write-Verbose
+        }
     } catch {
         if (!$RunAsConnection) {
             Write-Output $servicePrincipalConnection
@@ -177,7 +195,18 @@ function Get-ModuleContentUrl($ModuleName) {
 }
 
 # Imports the module with given version into Azure Automation
-function Import-AutomationModule([string] $ModuleName) {
+function Import-AutomationModule([string] $ModuleName, [bool] $UseAzModule = $false) {
+
+    $NewAutomationModule = $null
+    $GetAutomationModule = $null
+    if ($UseAzModule) {
+        $GetAutomationModule = $script:GetAzAutomationModule
+        $NewAutomationModule = $script:NewAzAutomationModule
+    } else {
+        $GetAutomationModule = $script:GetAzureRmAutomationModule
+        $NewAutomationModule = $script:NewAzureRmAutomationModule
+    }
+
 
     $LatestModuleVersionOnGallery = (Get-ModuleDependencyAndLatestVersion $ModuleName)[0]
 
@@ -187,7 +216,7 @@ function Import-AutomationModule([string] $ModuleName) {
         $ModuleContentUrl = (Invoke-WebRequest -Uri $ModuleContentUrl -MaximumRedirection 0 -UseBasicParsing -ErrorAction Ignore).Headers.Location 
     } while (!$ModuleContentUrl.Contains(".nupkg"))
 
-    $CurrentModule = Get-AzureRmAutomationModule `
+    $CurrentModule = & $GetAutomationModule `
                         -Name $ModuleName `
                         -ResourceGroupName $ResourceGroupName `
                         -AutomationAccountName $AutomationAccountName
@@ -197,7 +226,7 @@ function Import-AutomationModule([string] $ModuleName) {
     } else {
         Write-Output "Importing $ModuleName module of version $LatestModuleVersionOnGallery to Automation"
 
-        New-AzureRmAutomationModule `
+        & $NewAutomationModule `
             -ResourceGroupName $ResourceGroupName `
             -AutomationAccountName $AutomationAccountName `
             -Name $ModuleName `
@@ -265,20 +294,21 @@ function AreAllModulesAdded([string[]] $ModuleListToAdd) {
 function Create-ModuleImportMapOrder([bool] $AzModuleOnly) {
     $ModuleImportMapOrder = $null
     $ProfileOrAccountsModuleName = $null
-    $CurrentAutomationModuleList = $null
-    # Get all the modules in the current automation account
+    $GetAutomationModule = $null
+
     # Use the relevant module class to avoid conflicts
     if ($AzModuleOnly) {
         $ProfileOrAccountsModuleName = $script:AzAccountsModuleName
-        $CurrentAutomationModuleList = Get-AzAutomationModule `
-                                            -ResourceGroupName $ResourceGroupName `
-                                            -AutomationAccountName $AutomationAccountName
+        $GetAutomationModule = $script:GetAzAutomationModule
     } else {
-        $ProfileOrAccountsModuleName = $script:AzureRMProfileModuleName
-        $CurrentAutomationModuleList = Get-AzureRmAutomationModule `
-                                            -ResourceGroupName $ResourceGroupName `
-                                            -AutomationAccountName $AutomationAccountName
+        $ProfileOrAccountsModuleName = $script:AzureRmProfileModuleName
+        $GetAutomationModule = $script:GetAzureRmAutomationModule
     }
+
+    # Get all the modules in the current automation account
+    $CurrentAutomationModuleList = & $GetAutomationModule `
+                                        -ResourceGroupName $ResourceGroupName `
+                                        -AutomationAccountName $AutomationAccountName
 
     # Get the latest version of the AzureRM.Profile OR Az.Accounts module
     $VersionAndDependencies = Get-ModuleDependencyAndLatestVersion $ProfileOrAccountsModuleName
@@ -327,7 +357,14 @@ function Create-ModuleImportMapOrder([bool] $AzModuleOnly) {
 # Wait and confirm that all the modules in the list have been imported successfully in Azure Automation
 function Wait-AllModulesImported(
             [Collections.Generic.List[string]] $ModuleList,
-            [int] $Count) {
+            [int] $Count,
+            [bool] $UseAzModule = $false) {
+
+    $GetAutomationModule = if ($UseAzModule) {
+        $script:GetAzAutomationModule
+    } else {
+        $script:GetAzureRmAutomationModule
+    }
 
     $i = $Count - $SimultaneousModuleImportJobCount
     if ($i -lt 0) { $i = 0 }
@@ -337,7 +374,7 @@ function Wait-AllModulesImported(
 
         Write-Output ("Checking import Status for module : {0}" -f $Module)
         while ($true) {
-            $AutomationModule = Get-AzureRmAutomationModule `
+            $AutomationModule = & $GetAutomationModule `
                                     -Name $Module `
                                     -ResourceGroupName $ResourceGroupName `
                                     -AutomationAccountName $AutomationAccountName
@@ -364,26 +401,26 @@ function Wait-AllModulesImported(
 # Uses the module import map created to import modules. 
 # It will only import modules from an element in the array if all the modules
 # from the previous element have been added.
-function Import-ModulesInAutomationAccordingToDependency([string[][]] $ModuleImportMapOrder) {
+function Import-ModulesInAutomationAccordingToDependency([string[][]] $ModuleImportMapOrder, [bool] $UseAzModule) {
 
     foreach($ModuleList in $ModuleImportMapOrder) {
         $i = 0
         Write-Output "Importing Array of modules : $ModuleList"
         foreach ($Module in $ModuleList) {
             Write-Verbose ("Importing module : {0}" -f $Module)
-            Import-AutomationModule -ModuleName $Module
+            Import-AutomationModule -ModuleName $Module -UseAzModule $UseAzModule
             $i++
             if ($i % $SimultaneousModuleImportJobCount -eq 0) {
                 # It takes some time for the modules to start getting imported.
                 # Sleep for sometime before making a query to see the status
                 Start-Sleep -Seconds 20
-                Wait-AllModulesImported $ModuleList $i
+                Wait-AllModulesImported $ModuleList $i $UseAzModule
             }
         }
 
         if ($i -lt $SimultaneousModuleImportJobCount) {
             Start-Sleep -Seconds 20
-            Wait-AllModulesImported $ModuleList $i
+            Wait-AllModulesImported $ModuleList $i $UseAzModule
         }
     }
 }
@@ -436,23 +473,30 @@ if ($ModuleVersionOverrides) {
     $ModuleVersionOverridesHashTable = @{}
 }
 
-$AzModuleOnly = $false
-# restrict updates to only Az module?
+
+$UseAzModule = $null
+$AutomationModuleName = $null
+
+# We want to support updating Az modules. This means this runbook should support upgrading using only Az modules
 if ($AzureModuleClass -eq "Az") {
-    # Import the latest version of the Az automation and accounts version to the local sandbox
-    Update-ProfileAndAutomationVersionToLatest $script:AzAutomationModuleName
-    $AzModuleOnly = $true
+    $UseAzModule = $true
+    $AutomationModuleName = $script:AzAutomationModuleName
 } elseif ( $AzureModuleClass -eq "AzureRM") {
-    # Import the latest version of the AzureRM automation and profile version to the local sandbox
-    Update-ProfileAndAutomationVersionToLatest $script:AzureRMAutomationModuleName
-    $AzModuleOnly = $false
+    $UseAzModule = $false
+    $AutomationModuleName = $script:AzureRMAutomationModuleName
+} else {
+     Write-Error "Invalid AzureModuleClass: '$AzureModuleClass'. Must be either Az or AzureRM" -ErrorAction Stop
 }
+
+# Import the latest version of the Az automation and accounts version to the local sandbox
+Update-ProfileAndAutomationVersionToLatest $AutomationModuleName
 
 if ($Login) {
-    Login-AzureAutomation
+    Login-AzureAutomation $UseAzModule
 }
 
-$ModuleImportMapOrder = Create-ModuleImportMapOrder $AzModuleOnly
-Import-ModulesInAutomationAccordingToDependency $ModuleImportMapOrder 
+$ModuleImportMapOrder = Create-ModuleImportMapOrder $UseAzModule
+Import-ModulesInAutomationAccordingToDependency $ModuleImportMapOrder $UseAzModule
+
 
 #endregion
