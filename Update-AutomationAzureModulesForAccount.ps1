@@ -22,6 +22,9 @@ The Azure Automation account name.
 .PARAMETER SimultaneousModuleImportJobCount
 (Optional) The maximum number of module import jobs allowed to run concurrently.
 
+.PARAMETER AzureModuleClass
+(Optional) The class of module that will be updated (AzureRM or Az)
+
 .PARAMETER AzureEnvironment
 (Optional) Azure environment name.
 
@@ -52,6 +55,8 @@ param(
     [string] $AutomationAccountName,
 
     [int] $SimultaneousModuleImportJobCount = 10,
+
+    [string] $AzureModuleClass = 'AzureRM',
 
     [string] $AzureEnvironment = 'AzureCloud',
 
@@ -257,19 +262,30 @@ function AreAllModulesAdded([string[]] $ModuleListToAdd) {
 # element in the array consist of modules with no dependencies.
 # The second element only depends on the modules in the first element, the
 # third element only dependes on modules in the first and second and so on. 
-function Create-ModuleImportMapOrder {
+function Create-ModuleImportMapOrder([bool] $AzModuleOnly) {
     $ModuleImportMapOrder = $null
-    # Get the latest version of the AzureRM.Profile module
-    $VersionAndDependencies = Get-ModuleDependencyAndLatestVersion $script:AzureRMProfileModuleName
-
-    $AzureRMProfileEntry = $script:AzureRMProfileModuleName
-    $AzureRMProfileEntryArray = ,$AzureRMProfileEntry
-    $ModuleImportMapOrder += ,$AzureRMProfileEntryArray
-
+    $ProfileOrAccountsModuleName = $null
+    $CurrentAutomationModuleList = $null
     # Get all the modules in the current automation account
-    $CurrentAutomationModuleList = Get-AzureRmAutomationModule `
-                                        -ResourceGroupName $ResourceGroupName `
-                                        -AutomationAccountName $AutomationAccountName
+    # Use the relevant module class to avoid conflicts
+    if ($AzModuleOnly) {
+        $ProfileOrAccountsModuleName = $script:AzAccountsModuleName
+        $CurrentAutomationModuleList = Get-AzAutomationModule `
+                                            -ResourceGroupName $ResourceGroupName `
+                                            -AutomationAccountName $AutomationAccountName
+    } else {
+        $ProfileOrAccountsModuleName = $script:AzureRMProfileModuleName
+        $CurrentAutomationModuleList = Get-AzureRmAutomationModule `
+                                            -ResourceGroupName $ResourceGroupName `
+                                            -AutomationAccountName $AutomationAccountName
+    }
+
+    # Get the latest version of the AzureRM.Profile OR Az.Accounts module
+    $VersionAndDependencies = Get-ModuleDependencyAndLatestVersion $ProfileOrAccountsModuleName
+
+    $ModuleEntry = $ProfileOrAccountsModuleName
+    $ModuleEntryArray = ,$ModuleEntry
+    $ModuleImportMapOrder += ,$ModuleEntryArray
 
     do {
         $NextAutomationModuleList = $null
@@ -420,14 +436,23 @@ if ($ModuleVersionOverrides) {
     $ModuleVersionOverridesHashTable = @{}
 }
 
-# Import the latest version of the Azure automation and profile version to the local sandbox
-Update-ProfileAndAutomationVersionToLatest($script:AzureRMAutomationModuleName)
+$AzModuleOnly = $false
+# restrict updates to only Az module?
+if ($AzureModuleClass -eq "Az") {
+    # Import the latest version of the Az automation and accounts version to the local sandbox
+    Update-ProfileAndAutomationVersionToLatest($script:AzAutomationModuleName)
+    $AzModuleOnly = $true
+} elseif ( $AzureModuleClass -eq "AzureRM") {
+    # Import the latest version of the AzureRM automation and profile version to the local sandbox
+    Update-ProfileAndAutomationVersionToLatest($script:AzureRMAutomationModuleName)
+    $AzModuleOnly = $false
+}
 
 if ($Login) {
     Login-AzureAutomation
 }
 
-$ModuleImportMapOrder = Create-ModuleImportMapOrder
+$ModuleImportMapOrder = Create-ModuleImportMapOrder($AzModuleOnly)
 Import-ModulesInAutomationAccordingToDependency $ModuleImportMapOrder 
 
 #endregion
