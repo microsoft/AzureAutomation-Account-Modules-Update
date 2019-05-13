@@ -440,11 +440,11 @@ $AzModuleOnly = $false
 # restrict updates to only Az module?
 if ($AzureModuleClass -eq "Az") {
     # Import the latest version of the Az automation and accounts version to the local sandbox
-    Update-ProfileAndAutomationVersionToLatest($script:AzAutomationModuleName)
+    Update-ProfileAndAutomationVersionToLatest $script:AzAutomationModuleName
     $AzModuleOnly = $true
 } elseif ( $AzureModuleClass -eq "AzureRM") {
     # Import the latest version of the AzureRM automation and profile version to the local sandbox
-    Update-ProfileAndAutomationVersionToLatest($script:AzureRMAutomationModuleName)
+    Update-ProfileAndAutomationVersionToLatest $script:AzureRMAutomationModuleName
     $AzModuleOnly = $false
 }
 
@@ -452,7 +452,7 @@ if ($Login) {
     Login-AzureAutomation
 }
 
-$ModuleImportMapOrder = Create-ModuleImportMapOrder($AzModuleOnly)
+$ModuleImportMapOrder = Create-ModuleImportMapOrder $AzModuleOnly
 Import-ModulesInAutomationAccordingToDependency $ModuleImportMapOrder 
 
 #endregion
