@@ -18,8 +18,13 @@ Import this runbook into your Automation account, and [start](https://docs.micro
   run when the **Update Azure Modules** button is pushed or when this runbook is invoked directly
   via ARM API for this Automation account. If this is not what you want, specify a different name
   when importing this runbook.
-* Only **Azure** and **AzureRM.\*** modules are currently supported. The new [Azure PowerShell Az modules](https://docs.microsoft.com/powershell/azure/new-azureps-module-az) are not supported yet.
-  Avoid starting this runbook on Automation accounts that contain Az modules.
+* **Azure** and **AzureRM.\*** modules are currently supported by default.
+* The new [Azure PowerShell Az modules](https://docs.microsoft.com/powershell/azure/new-azureps-module-az)
+  are also supported. You **must** supply the `AzureModuleClass` runbook parameter with `Az` if
+  your runbooks use only Az modules to avoid conflicts. More information can be found in the
+  [Microsoft Docs](https://docs.microsoft.com/en-us/azure/automation/az-modules) and
+  issue [#5](https://github.com/microsoft/AzureAutomation-Account-Modules-Update/issues/5).
+  Avoid starting this runbook on Automation accounts that contain both AzureRM and Az modules.
 * Before starting this runbook, make sure your Automation account has an [Azure Run As account credential](https://docs.microsoft.com/azure/automation/manage-runas-account) created.
 * You can use this code as a regular PowerShell script instead of a runbook: just login to Azure
   using the [Connect-AzureRmAccount](https://docs.microsoft.com/powershell/module/azurerm.profile/connect-azurermaccount)

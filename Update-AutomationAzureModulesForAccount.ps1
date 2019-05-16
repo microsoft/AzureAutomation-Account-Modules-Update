@@ -25,7 +25,7 @@ The Azure Automation account name.
 .PARAMETER AzureModuleClass
 (Optional) The class of module that will be updated (AzureRM or Az)
 If set to Az, this script will rely on only Az modules to update other modules.
-Set this to Az if your runbook contains only Az modules to avoid conflicts.
+Set this to Az if your runbooks use only Az modules to avoid conflicts.
 
 .PARAMETER AzureEnvironment
 (Optional) Azure environment name.
@@ -414,13 +414,13 @@ function Import-ModulesInAutomationAccordingToDependency([string[][]] $ModuleImp
                 # It takes some time for the modules to start getting imported.
                 # Sleep for sometime before making a query to see the status
                 Start-Sleep -Seconds 20
-                Wait-AllModulesImported $ModuleList $i $UseAzModule
+                Wait-AllModulesImported -ModuleList $ModuleList -Count $i -UseAzModule $UseAzModule
             }
         }
 
         if ($i -lt $SimultaneousModuleImportJobCount) {
             Start-Sleep -Seconds 20
-            Wait-AllModulesImported $ModuleList $i $UseAzModule
+            Wait-AllModulesImported -ModuleList $ModuleList -Count $i -UseAzModule $UseAzModule
         }
     }
 }
