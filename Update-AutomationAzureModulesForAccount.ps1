@@ -447,6 +447,8 @@ if ($ResourceGroupName -eq "" -and $AutomationAccountName -eq "") {
     else {
         Write-Error -Message "Failed to automatically retrieve resource group and name of AA account" -ErrorAction Stop
     }
+    Write-Output -InputObject "AA Resource Group Name: $ResourceGroupName"
+    Write-Output -InputObject "AA Account Name: $AutomationAccountName"
 }
 $ModuleImportMapOrder = Create-ModuleImportMapOrder
 Import-ModulesInAutomationAccordingToDependency $ModuleImportMapOrder
