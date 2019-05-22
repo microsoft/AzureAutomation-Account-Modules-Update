@@ -13,12 +13,6 @@ Azure Automation account with the module versions published to the PowerShell Ga
 
 Prerequisite: an Azure Automation account with an Azure Run As account credential.
 
-.PARAMETER ResourceGroupName
-The Azure resource group name.
-
-.PARAMETER AutomationAccountName
-The Azure Automation account name.
-
 .PARAMETER SimultaneousModuleImportJobCount
 (Optional) The maximum number of module import jobs allowed to run concurrently.
 
@@ -45,20 +39,14 @@ https://docs.microsoft.com/en-us/azure/automation/automation-update-azure-module
 
 [Diagnostics.CodeAnalysis.SuppressMessageAttribute("PSUseApprovedVerbs", "")]
 param(
-    [Parameter(Mandatory = $true)]
-    [string] $ResourceGroupName,
-
-    [Parameter(Mandatory = $true)]
-    [string] $AutomationAccountName,
-
     [int] $SimultaneousModuleImportJobCount = 10,
 
     [string] $AzureEnvironment = 'AzureCloud',
 
     [bool] $Login = $true,
-    
+
     [string] $ModuleVersionOverrides = $null,
-    
+
     [string] $PsGalleryApiUrl = 'https://www.powershellgallery.com/api/v2'
 )
 
@@ -118,7 +106,7 @@ function Login-AzureAutomation {
 function Get-ModuleDependencyAndLatestVersion([string] $ModuleName) {
 
     $ModuleUrlFormat = "$PsGalleryApiUrl/Search()?`$filter={1}&searchTerm=%27{0}%27&targetFramework=%27%27&includePrerelease=false&`$skip=0&`$top=40"
-        
+
     $ForcedModuleVersion = $ModuleVersionOverridesHashTable[$ModuleName]
 
     $CurrentModuleUrl =
@@ -175,7 +163,7 @@ function Import-AutomationModule([string] $ModuleName) {
     $ModuleContentUrl = Get-ModuleContentUrl $ModuleName
     # Find the actual blob storage location of the module
     do {
-        $ModuleContentUrl = (Invoke-WebRequest -Uri $ModuleContentUrl -MaximumRedirection 0 -UseBasicParsing -ErrorAction Ignore).Headers.Location 
+        $ModuleContentUrl = (Invoke-WebRequest -Uri $ModuleContentUrl -MaximumRedirection 0 -UseBasicParsing -ErrorAction Ignore).Headers.Location
     } while (!$ModuleContentUrl.Contains(".nupkg"))
 
     $CurrentModule = Get-AzureRmAutomationModule `
@@ -232,14 +220,14 @@ function AreAllModulesAdded([string[]] $ModuleListToAdd) {
         # the ':' character. The explicit intent of this runbook is to always install the latest module versions,
         # so we want to completely ignore version specifications here.
         $ModuleNameToAdd = $ModuleToAdd -replace '\:.*', ''
-            
+
         foreach($AlreadyIncludedModules in $ModuleImportMapOrder) {
             if ($AlreadyIncludedModules -contains $ModuleNameToAdd) {
                 $ModuleAccounted = $true
                 break
             }
         }
-        
+
         if (!$ModuleAccounted) {
             $Result = $false
             break
@@ -252,7 +240,7 @@ function AreAllModulesAdded([string[]] $ModuleListToAdd) {
 # Creates a module import map. This is a 2D array of strings so that the first
 # element in the array consist of modules with no dependencies.
 # The second element only depends on the modules in the first element, the
-# third element only dependes on modules in the first and second and so on. 
+# third element only dependes on modules in the first and second and so on.
 function Create-ModuleImportMapOrder {
     $ModuleImportMapOrder = $null
     # Get the latest version of the AzureRM.Profile module
@@ -270,7 +258,7 @@ function Create-ModuleImportMapOrder {
     do {
         $NextAutomationModuleList = $null
         $CurrentChainVersion = $null
-        # Add it to the list if the modules are not available in the same list 
+        # Add it to the list if the modules are not available in the same list
         foreach ($Module in $CurrentAutomationModuleList) {
             $Name = $Module.Name
             Write-Verbose "Checking dependencies for $Name"
@@ -334,14 +322,14 @@ function Wait-AllModulesImported(
         }
 
         if ($AutomationModule.ProvisioningState -ne "Succeeded") {
-            Write-Error ("Failed to import module : {0}. Status : {1}" -f $Module, $AutomationModule.ProvisioningState)                
+            Write-Error ("Failed to import module : {0}. Status : {1}" -f $Module, $AutomationModule.ProvisioningState)
         } else {
             Write-Output ("Successfully imported module : {0}" -f $Module)
         }
-    }               
+    }
 }
 
-# Uses the module import map created to import modules. 
+# Uses the module import map created to import modules.
 # It will only import modules from an element in the array if all the modules
 # from the previous element have been added.
 function Import-ModulesInAutomationAccordingToDependency([string[][]] $ModuleImportMapOrder) {
@@ -369,7 +357,7 @@ function Import-ModulesInAutomationAccordingToDependency([string[][]] $ModuleImp
 }
 
 function Update-ProfileAndAutomationVersionToLatest {
-    # Get the latest azure automation module version 
+    # Get the latest azure automation module version
     $VersionAndDependencies = Get-ModuleDependencyAndLatestVersion $script:AzureRMAutomationModuleName
 
     # Automation only has dependency on profile
@@ -417,13 +405,37 @@ if ($ModuleVersionOverrides) {
 }
 
 # Import the latest version of the Azure automation and profile version to the local sandbox
-Update-ProfileAndAutomationVersionToLatest 
+Update-ProfileAndAutomationVersionToLatest
 
 if ($Login) {
     Login-AzureAutomation
 }
+# Fetch AA account information from executing Runbook
+$AutomationResource = Get-AzureRmResource -ResourceType Microsoft.Automation/AutomationAccounts
+
+foreach ($Automation in $AutomationResource) {
+    $Job = Get-AzureRmAutomationJob -ResourceGroupName $Automation.ResourceGroupName -AutomationAccountName $Automation.Name -Id $PSPrivateMetadata.JobId.Guid -ErrorAction SilentlyContinue
+    if (!([string]::IsNullOrEmpty($Job))) {
+        $AutomationInformation = @{}
+        $AutomationInformation.Add("SubscriptionId", $Automation.SubscriptionId)
+        $AutomationInformation.Add("Location", $Automation.Location)
+        $AutomationInformation.Add("ResourceGroupName", $Job.ResourceGroupName)
+        $AutomationInformation.Add("AutomationAccountName", $Job.AutomationAccountName)
+        $AutomationInformation.Add("RunbookName", $Job.RunbookName)
+        $AutomationInformation.Add("JobId", $Job.JobId.Guid)
+        break;
+    }
+}
+# Extract resource group name and account name for AA from executing Runbook
+if(!([string]::IsNullOrEmpty($AutomationInformation))) {
+    $ResourceGroupName = $AutomationInformation.ResourceGroupName
+    $AutomationAccountName = $AutomationInformation.AutomationAccountName
+}
+else {
+    Write-Error -Message "Failed to automatically retrieve resource group and name of AA account" -ErrorAction Stop
+}
 
 $ModuleImportMapOrder = Create-ModuleImportMapOrder
-Import-ModulesInAutomationAccordingToDependency $ModuleImportMapOrder 
+Import-ModulesInAutomationAccordingToDependency $ModuleImportMapOrder
 
 #endregion
