@@ -13,6 +13,12 @@ Azure Automation account with the module versions published to the PowerShell Ga
 
 Prerequisite: an Azure Automation account with an Azure Run As account credential.
 
+.PARAMETER ResourceGroupName
+(Optional) The Azure resource group name. If run in AA it will auto discover account
+
+.PARAMETER AutomationAccountName
+(Optional) The Azure Automation account name. If run in AA it will auto discover account
+
 .PARAMETER SimultaneousModuleImportJobCount
 (Optional) The maximum number of module import jobs allowed to run concurrently.
 
@@ -39,6 +45,10 @@ https://docs.microsoft.com/en-us/azure/automation/automation-update-azure-module
 
 [Diagnostics.CodeAnalysis.SuppressMessageAttribute("PSUseApprovedVerbs", "")]
 param(
+    [string] $ResourceGroupName = "",
+
+    [string] $AutomationAccountName = "",
+
     [int] $SimultaneousModuleImportJobCount = 10,
 
     [string] $AzureEnvironment = 'AzureCloud',
@@ -410,31 +420,34 @@ Update-ProfileAndAutomationVersionToLatest
 if ($Login) {
     Login-AzureAutomation
 }
-# Fetch AA account information from executing Runbook
-$AutomationResource = Get-AzureRmResource -ResourceType Microsoft.Automation/AutomationAccounts
 
-foreach ($Automation in $AutomationResource) {
-    $Job = Get-AzureRmAutomationJob -ResourceGroupName $Automation.ResourceGroupName -AutomationAccountName $Automation.Name -Id $PSPrivateMetadata.JobId.Guid -ErrorAction SilentlyContinue
-    if (!([string]::IsNullOrEmpty($Job))) {
-        $AutomationInformation = @{}
-        $AutomationInformation.Add("SubscriptionId", $Automation.SubscriptionId)
-        $AutomationInformation.Add("Location", $Automation.Location)
-        $AutomationInformation.Add("ResourceGroupName", $Job.ResourceGroupName)
-        $AutomationInformation.Add("AutomationAccountName", $Job.AutomationAccountName)
-        $AutomationInformation.Add("RunbookName", $Job.RunbookName)
-        $AutomationInformation.Add("JobId", $Job.JobId.Guid)
-        break;
+# If ResourceGroupName or AutomationAccountName is not passed in as parameters, logic will auto discover AA account
+if ($ResourceGroupName -eq "" -and $AutomationAccountName -eq "") {
+    # Fetch AA account information from executing Runbook
+    $AutomationResource = Get-AzureRmResource -ResourceType Microsoft.Automation/AutomationAccounts
+
+    foreach ($Automation in $AutomationResource) {
+        $Job = Get-AzureRmAutomationJob -ResourceGroupName $Automation.ResourceGroupName -AutomationAccountName $Automation.Name -Id $PSPrivateMetadata.JobId.Guid -ErrorAction SilentlyContinue
+        if (!([string]::IsNullOrEmpty($Job))) {
+            $AutomationInformation = @{}
+            $AutomationInformation.Add("SubscriptionId", $Automation.SubscriptionId)
+            $AutomationInformation.Add("Location", $Automation.Location)
+            $AutomationInformation.Add("ResourceGroupName", $Job.ResourceGroupName)
+            $AutomationInformation.Add("AutomationAccountName", $Job.AutomationAccountName)
+            $AutomationInformation.Add("RunbookName", $Job.RunbookName)
+            $AutomationInformation.Add("JobId", $Job.JobId.Guid)
+            break;
+        }
+    }
+    # Extract resource group name and account name for AA from executing Runbook
+    if (!([string]::IsNullOrEmpty($AutomationInformation))) {
+        $ResourceGroupName = $AutomationInformation.ResourceGroupName
+        $AutomationAccountName = $AutomationInformation.AutomationAccountName
+    }
+    else {
+        Write-Error -Message "Failed to automatically retrieve resource group and name of AA account" -ErrorAction Stop
     }
 }
-# Extract resource group name and account name for AA from executing Runbook
-if(!([string]::IsNullOrEmpty($AutomationInformation))) {
-    $ResourceGroupName = $AutomationInformation.ResourceGroupName
-    $AutomationAccountName = $AutomationInformation.AutomationAccountName
-}
-else {
-    Write-Error -Message "Failed to automatically retrieve resource group and name of AA account" -ErrorAction Stop
-}
-
 $ModuleImportMapOrder = Create-ModuleImportMapOrder
 Import-ModulesInAutomationAccordingToDependency $ModuleImportMapOrder
 
