@@ -323,6 +323,17 @@ function Create-ModuleImportMapOrder([bool] $AzModuleOnly) {
         # Add it to the list if the modules are not available in the same list 
         foreach ($Module in $CurrentAutomationModuleList) {
             $Name = $Module.Name
+
+            # ignore conflicting modules
+            if ($AzModuleOnly) {
+                if ($Name -eq "AzureRM" -Or $Name -Like "AzureRM.*") {
+                    continue
+                }
+            } else {
+                if ($Name -eq "Az" -Or $Name -Like "Az.*") {
+                    continue
+                }
+            }
             Write-Verbose "Checking dependencies for $Name"
             $VersionAndDependencies = Get-ModuleDependencyAndLatestVersion $Module.Name
             if ($null -eq $VersionAndDependencies) {
