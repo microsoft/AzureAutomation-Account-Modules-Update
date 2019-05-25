@@ -305,10 +305,15 @@ function Create-ModuleImportMapOrder([bool] $AzModuleOnly) {
         $GetAutomationModule = $script:GetAzureRmAutomationModule
     }
 
-    # Get all the modules in the current automation account
+    # Get all the non-conflicting modules in the current automation account
     $CurrentAutomationModuleList = & $GetAutomationModule `
                                         -ResourceGroupName $ResourceGroupName `
-                                        -AutomationAccountName $AutomationAccountName
+                                        -AutomationAccountName $AutomationAccountName |
+        ?{
+            ($AzModuleOnly -and ($_.Name -eq 'Az' -or $_.Name -like 'Az.*')) -or
+            (!$AzModuleOnly -and ($_.Name -eq 'AzureRM' -or $_.Name -like 'AzureRM.*')) -or
+            ($_.Name -eq 'Azure' -or $_.Name -like 'Azure.*')
+        }
 
     # Get the latest version of the AzureRM.Profile OR Az.Accounts module
     $VersionAndDependencies = Get-ModuleDependencyAndLatestVersion $ProfileOrAccountsModuleName
@@ -324,16 +329,6 @@ function Create-ModuleImportMapOrder([bool] $AzModuleOnly) {
         foreach ($Module in $CurrentAutomationModuleList) {
             $Name = $Module.Name
 
-            # ignore conflicting modules
-            if ($AzModuleOnly) {
-                if ($Name -eq "AzureRM" -Or $Name -Like "AzureRM.*") {
-                    continue
-                }
-            } else {
-                if ($Name -eq "Az" -Or $Name -Like "Az.*") {
-                    continue
-                }
-            }
             Write-Verbose "Checking dependencies for $Name"
             $VersionAndDependencies = Get-ModuleDependencyAndLatestVersion $Module.Name
             if ($null -eq $VersionAndDependencies) {
