@@ -22,7 +22,7 @@ Import this runbook into your Automation account, and [start](https://docs.micro
 * The new [Azure PowerShell Az modules](https://docs.microsoft.com/powershell/azure/new-azureps-module-az)
   are also supported. You **must** supply the `AzureModuleClass` runbook parameter with `Az` if
   your runbooks use only Az modules to avoid conflicts. More information can be found in the
-  [Microsoft Docs](https://docs.microsoft.com/en-us/azure/automation/az-modules) and
+  [Microsoft Docs](https://docs.microsoft.com/azure/automation/az-modules) and
   issue [#5](https://github.com/microsoft/AzureAutomation-Account-Modules-Update/issues/5).
   Avoid starting this runbook on Automation accounts that contain both AzureRM and Az modules.
 * Before starting this runbook, make sure your Automation account has an [Azure Run As account credential](https://docs.microsoft.com/azure/automation/manage-runas-account) created.
