@@ -1,3 +1,5 @@
+[![Build Status](https://anatolib-msft.visualstudio.com/AzureAutomation-Account-Modules-Update/_apis/build/status/microsoft.AzureAutomation-Account-Modules-Update?branchName=master)](https://anatolib-msft.visualstudio.com/AzureAutomation-Account-Modules-Update/_build/latest?definitionId=1&branchName=master)
+
 # Updating Azure PowerShell modules in Azure Automation accounts
 
 ## Purpose
