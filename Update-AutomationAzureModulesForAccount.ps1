@@ -198,7 +198,7 @@ function Import-AutomationModule([string] $ModuleName) {
 
 # Parses the dependency got from PowerShell Gallery and returns name and version
 function GetModuleNameAndVersionFromPowershellGalleryDependencyFormat([string] $Dependency) {
-    if ($Dependency -eq $null) {
+    if ($null -eq $Dependency) {
         throw "Improper dependency format"
     }
 
