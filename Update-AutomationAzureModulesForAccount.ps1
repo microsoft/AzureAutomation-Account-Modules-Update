@@ -311,8 +311,8 @@ function Create-ModuleImportMapOrder([bool] $AzModuleOnly) {
                                         -AutomationAccountName $AutomationAccountName |
         ?{
             ($AzModuleOnly -and ($_.Name -eq 'Az' -or $_.Name -like 'Az.*')) -or
-            (!$AzModuleOnly -and ($_.Name -eq 'AzureRM' -or $_.Name -like 'AzureRM.*')) -or
-            ($_.Name -eq 'Azure' -or $_.Name -like 'Azure.*')
+            (!$AzModuleOnly -and ($_.Name -eq 'AzureRM' -or $_.Name -like 'AzureRM.*' -or
+            $_.Name -eq 'Azure' -or $_.Name -like 'Azure.*'))
         }
 
     # Get the latest version of the AzureRM.Profile OR Az.Accounts module
