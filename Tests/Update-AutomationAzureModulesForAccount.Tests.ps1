@@ -77,7 +77,7 @@ Describe 'Update-AutomationAzureModulesForAccount runbook' {
     Context 'No overridden module versions' {
         Mock Get-AzureRmAutomationModule {
             @{
-                Name = 'FakeAzureModule'
+                Name = 'AzureRM.FakeAzureModule'
                 Version = '1.0.0'
                 ProvisioningState = 'Succeeded'
             }
@@ -154,10 +154,10 @@ Describe 'Update-AutomationAzureModulesForAccount runbook' {
         } -Verifiable
 
         Mock Invoke-RestMethod -ParameterFilter {
-            $Uri -match '%27FakeAzureModule%27'
+            $Uri -match '%27AzureRM.FakeAzureModule%27'
         } -MockWith {
             $Method | Should be 'Get' > $null
-            Assert-CorrectSearchUri -Uri $Uri -ModuleName FakeAzureModule
+            Assert-CorrectSearchUri -Uri $Uri -ModuleName AzureRM.FakeAzureModule
             
             @{
                 id = 'fake FakeAzureModule search result id'
@@ -181,21 +181,21 @@ Describe 'Update-AutomationAzureModulesForAccount runbook' {
         } -Verifiable
 
         Mock Invoke-WebRequest -ParameterFilter {
-            $Uri -match 'https://www.powershellgallery.com/api/v2/package/FakeAzureModule'
+            $Uri -match 'https://www.powershellgallery.com/api/v2/package/AzureRM.FakeAzureModule'
         } -MockWith {
-            $Uri | Should be 'https://www.powershellgallery.com/api/v2/package/FakeAzureModule' > $null
+            $Uri | Should be 'https://www.powershellgallery.com/api/v2/package/AzureRM.FakeAzureModule' > $null
 
             @{
                 Headers = @{
-                    Location = 'Fake/FakeAzureModule/Content/Location.nupkg'
+                    Location = 'Fake/AzureRM.FakeAzureModule/Content/Location.nupkg'
                 }
             }
         } -Verifiable
 
         Mock New-AzureRmAutomationModule -ParameterFilter {
-            $Name -eq 'FakeAzureModule'
+            $Name -eq 'AzureRM.FakeAzureModule'
         } -MockWith {
-            $ContentLink | Should be 'Fake/FakeAzureModule/Content/Location.nupkg' > $null
+            $ContentLink | Should be 'Fake/AzureRM.FakeAzureModule/Content/Location.nupkg' > $null
         } -Verifiable
 
         Invoke-Update-AutomationAzureModulesForAccount -OptionalParameters @{
@@ -207,7 +207,7 @@ Describe 'Update-AutomationAzureModulesForAccount runbook' {
         }
 
         It 'Updates fake Azure module' {
-            Assert-MockCalled New-AzureRmAutomationModule -ParameterFilter { $Name -eq 'FakeAzureModule' } -Times 1 -Exactly
+            Assert-MockCalled New-AzureRmAutomationModule -ParameterFilter { $Name -eq 'AzureRM.FakeAzureModule' } -Times 1 -Exactly
         }
 
         Assert-VerifiableMock
@@ -216,7 +216,7 @@ Describe 'Update-AutomationAzureModulesForAccount runbook' {
     Context 'With overridden module versions' {
         Mock Get-AzureRmAutomationModule {
             @{
-                Name = 'FakeAzureModule'
+                Name = 'AzureRM.FakeAzureModule'
                 Version = '1.0.0'
                 ProvisioningState = 'Succeeded'
             }
@@ -295,10 +295,10 @@ Describe 'Update-AutomationAzureModulesForAccount runbook' {
         } -Verifiable
 
         Mock Invoke-RestMethod -ParameterFilter {
-            $Uri -match '%27FakeAzureModule%27'
+            $Uri -match '%27AzureRM.FakeAzureModule%27'
         } -MockWith {
             $Method | Should be 'Get' > $null
-            Assert-CorrectSearchUri -Uri $Uri -ModuleName FakeAzureModule
+            Assert-CorrectSearchUri -Uri $Uri -ModuleName AzureRM.FakeAzureModule
             
             @{
                 id = 'fake FakeAzureModule search result id'
@@ -322,21 +322,21 @@ Describe 'Update-AutomationAzureModulesForAccount runbook' {
         } -Verifiable
 
         Mock Invoke-WebRequest -ParameterFilter {
-            $Uri -match 'https://www.powershellgallery.com/api/v2/package/FakeAzureModule'
+            $Uri -match 'https://www.powershellgallery.com/api/v2/package/AzureRM.FakeAzureModule'
         } -MockWith {
-            $Uri | Should be 'https://www.powershellgallery.com/api/v2/package/FakeAzureModule' > $null
+            $Uri | Should be 'https://www.powershellgallery.com/api/v2/package/AzureRM.FakeAzureModule' > $null
 
             @{
                 Headers = @{
-                    Location = 'Fake/FakeAzureModule/Content/Location.nupkg'
+                    Location = 'Fake/AzureRM.FakeAzureModule/Content/Location.nupkg'
                 }
             }
         } -Verifiable
 
         Mock New-AzureRmAutomationModule -ParameterFilter {
-            $Name -eq 'FakeAzureModule'
+            $Name -eq 'AzureRM.FakeAzureModule'
         } -MockWith {
-            $ContentLink | Should be 'Fake/FakeAzureModule/Content/Location.nupkg' > $null
+            $ContentLink | Should be 'Fake/AzureRM.FakeAzureModule/Content/Location.nupkg' > $null
         } -Verifiable
 
         Invoke-Update-AutomationAzureModulesForAccount -OptionalParameters @{
@@ -350,7 +350,7 @@ Describe 'Update-AutomationAzureModulesForAccount runbook' {
         }
 
         It 'Updates fake Azure module' {
-            Assert-MockCalled New-AzureRmAutomationModule -ParameterFilter { $Name -eq 'FakeAzureModule' } -Times 1 -Exactly
+            Assert-MockCalled New-AzureRmAutomationModule -ParameterFilter { $Name -eq 'AzureRM.FakeAzureModule' } -Times 1 -Exactly
         }
 
         Assert-VerifiableMock
@@ -407,31 +407,31 @@ Describe 'Update-AutomationAzureModulesForAccount runbook' {
 
         Mock Get-AzureRmAutomationModule {
             @{
-                Name = 'FakeAzureModule'
+                Name = 'AzureRM.FakeAzureModule'
                 Version = '1.0.0'
                 ProvisioningState = 'Succeeded'
             }
         } -Verifiable
 
         Mock Invoke-RestMethod -ParameterFilter {
-            $Uri -match '%27FakeAzureModule%27'
+            $Uri -match '%27AzureRM.FakeAzureModule%27'
         } -MockWith {
             $Method | Should be 'Get' > $null
-            Assert-CorrectSearchUri -Uri $Uri -ModuleName FakeAzureModule -Filter "Version%20eq%20'2.0.0'"
+            Assert-CorrectSearchUri -Uri $Uri -ModuleName AzureRM.FakeAzureModule -Filter "Version%20eq%20'2.0.0'"
             
             @{
                 id = 'fake FakeAzureModule search result id 1'
-                title = @{ InnerText = 'FakeAzureModule.Different' }
+                title = @{ InnerText = 'AzureRM.FakeAzureModule.Different' }
             }
             
             @{
                 id = 'fake FakeAzureModule search result id 2'
-                title = @{ InnerText = 'FakeAzureModule' }
+                title = @{ InnerText = 'AzureRM.FakeAzureModule' }
             }
             
             @{
                 id = 'fake FakeAzureModule search result id 3'
-                title = @{ InnerText = 'FakeAzureModule.AnotherOne' }
+                title = @{ InnerText = 'AzureRM.FakeAzureModule.AnotherOne' }
             }
         } -Verifiable
 
@@ -452,31 +452,31 @@ Describe 'Update-AutomationAzureModulesForAccount runbook' {
         } -Verifiable
 
         Mock Invoke-WebRequest -ParameterFilter {
-            $Uri -match 'https://www.powershellgallery.com/api/v2/package/FakeAzureModule'
+            $Uri -match 'https://www.powershellgallery.com/api/v2/package/AzureRM.FakeAzureModule'
         } -MockWith {
-            $Uri | Should be 'https://www.powershellgallery.com/api/v2/package/FakeAzureModule/2.0.0' > $null
+            $Uri | Should be 'https://www.powershellgallery.com/api/v2/package/AzureRM.FakeAzureModule/2.0.0' > $null
 
             @{
                 Headers = @{
-                    Location = 'Fake/FakeAzureModule/Content/Location.nupkg'
+                    Location = 'Fake/AzureRM.FakeAzureModule/Content/Location.nupkg'
                 }
             }
         } -Verifiable
 
         Mock New-AzureRmAutomationModule -ParameterFilter {
-            $Name -eq 'FakeAzureModule'
+            $Name -eq 'AzureRM.FakeAzureModule'
         } -MockWith {
-            $ContentLink | Should be 'Fake/FakeAzureModule/Content/Location.nupkg' > $null
+            $ContentLink | Should be 'Fake/AzureRM.FakeAzureModule/Content/Location.nupkg' > $null
         } -Verifiable
 
         Invoke-Update-AutomationAzureModulesForAccount -OptionalParameters @{
             ModuleVersionOverrides = "{
-                'FakeAzureModule' : '2.0.0'
+                'AzureRM.FakeAzureModule' : '2.0.0'
             }"
         }
 
         It 'Updates fake Azure module' {
-            Assert-MockCalled New-AzureRmAutomationModule -ParameterFilter { $Name -eq 'FakeAzureModule' } -Times 1 -Exactly
+            Assert-MockCalled New-AzureRmAutomationModule -ParameterFilter { $Name -eq 'AzureRM.FakeAzureModule' } -Times 1 -Exactly
         }
 
         Assert-VerifiableMock
