@@ -32,6 +32,10 @@ Describe 'Update-AutomationAzureModulesForAccount runbook' {
 
     function New-AzureRmAutomationModule($ResourceGroupName, $AutomationAccountName, $Name, $ContentLink) { }
 
+    function Get-AzAutomationModule($Name, $ResourceGroupName, $AutomationAccountName) { }
+
+    function New-AzAutomationModule($ResourceGroupName, $AutomationAccountName, $Name, $ContentLink) { }
+
     #endregion
 
     #region Global mocks
@@ -481,4 +485,334 @@ Describe 'Update-AutomationAzureModulesForAccount runbook' {
 
         Assert-VerifiableMock
     }
+
+    Context 'Az module present with default ModuleClassName AzureRM' {
+        Mock Get-AzureRmAutomationModule {
+            @{
+                Name = 'Az.FakeAzModule'
+                Version = '1.0.0'
+                ProvisioningState = 'Succeeded'
+            }
+        } -Verifiable
+
+        Mock Invoke-RestMethod -ParameterFilter {
+            $Uri -match '%27AzureRM\.Automation%27'
+        } -MockWith {
+            $Method | Should be 'Get' > $null
+            Assert-CorrectSearchUri -Uri $Uri -ModuleName AzureRM.Automation
+
+            @{
+                id = 'fake AzureRM.Automation search result id'
+            }
+        } -Verifiable
+
+        Mock Invoke-RestMethod -ParameterFilter {
+            $Uri -eq 'fake AzureRM.Automation search result id'
+        } -MockWith {
+            $Method | Should be 'Get' > $null
+
+            @{
+                entry = @{
+                    properties = @{
+                        version = 'fake version'
+                        dependencies = 'AzureRM.Profile:[1.0.0]:'
+                        owners = 'azure-sdk'
+                    }
+                }
+            }
+        } -Verifiable
+
+        Mock Invoke-RestMethod -ParameterFilter {
+            $Uri -match '%27AzureRM\.Profile%27'
+        } -MockWith {
+            $Method | Should be 'Get' > $null
+            Assert-CorrectSearchUri -Uri $Uri -ModuleName AzureRM.Profile
+
+            @{
+                id = 'fake AzureRM.Profile search result id'
+            }
+        } -Verifiable
+
+        Mock Invoke-RestMethod -ParameterFilter {
+            $Uri -eq 'fake AzureRM.Profile search result id'
+        } -MockWith {
+            $Method | Should be 'Get' > $null
+
+            @{
+                entry = @{
+                    properties = @{
+                        version = 'fake version'
+                        dependencies = ''
+                        owners = 'azure-sdk'
+                    }
+                }
+            }
+        } -Verifiable
+
+        Mock Invoke-WebRequest -ParameterFilter {
+            $Uri -eq 'https://www.powershellgallery.com/api/v2/package/AzureRM.Profile'
+        } -MockWith {
+            @{
+                Headers = @{
+                    Location = 'Fake/AzureRM.Profile/Content/Location.nupkg'
+                }
+            }
+        } -Verifiable
+
+        Mock New-AzureRmAutomationModule -ParameterFilter {
+            $Name -eq 'AzureRM.Profile'
+        } -MockWith {
+            $ContentLink | Should be 'Fake/AzureRM.Profile/Content/Location.nupkg' > $null
+        } -Verifiable
+
+        Invoke-Update-AutomationAzureModulesForAccount -OptionalParameters @{
+            ModuleVersionOverrides = '{ }'
+        }
+
+        It 'Updates AzureRM.Profile module' {
+            Assert-MockCalled New-AzureRmAutomationModule -ParameterFilter { $Name -eq 'AzureRM.Profile' } -Times 1 -Exactly
+        }
+
+        It 'Ignores fake Az module' {
+            Assert-MockCalled New-AzureRmAutomationModule -ParameterFilter { $Name -eq 'Az.FakeAzModule' } -Times 0 -Exactly
+        }
+
+        Assert-VerifiableMock
+    }
+
+    Context 'AzureRM module present with ModuleClassName Az' {
+        Mock Get-AzAutomationModule {
+            @{
+                Name = 'AzureRM.FakeAzureModule'
+                Version = '1.0.0'
+                ProvisioningState = 'Succeeded'
+            }
+        } -Verifiable
+
+        Mock Invoke-RestMethod -ParameterFilter {
+            $Uri -match '%27Az\.Automation%27'
+        } -MockWith {
+            $Method | Should be 'Get' > $null
+            Assert-CorrectSearchUri -Uri $Uri -ModuleName Az.Automation
+
+            @{
+                id = 'fake Az.Automation search result id'
+            }
+        } -Verifiable
+
+        Mock Invoke-RestMethod -ParameterFilter {
+            $Uri -eq 'fake Az.Automation search result id'
+        } -MockWith {
+            $Method | Should be 'Get' > $null
+
+            @{
+                entry = @{
+                    properties = @{
+                        version = 'fake version'
+                        dependencies = 'Az.Accounts:[1.0.0]:'
+                        owners = 'azure-sdk'
+                    }
+                }
+            }
+        } -Verifiable
+
+        Mock Invoke-RestMethod -ParameterFilter {
+            $Uri -match '%27Az\.Accounts%27'
+        } -MockWith {
+            $Method | Should be 'Get' > $null
+            Assert-CorrectSearchUri -Uri $Uri -ModuleName Az.Accounts
+
+            @{
+                id = 'fake Az.Accounts search result id'
+            }
+        } -Verifiable
+
+        Mock Invoke-RestMethod -ParameterFilter {
+            $Uri -eq 'fake Az.Accounts search result id'
+        } -MockWith {
+            $Method | Should be 'Get' > $null
+
+            @{
+                entry = @{
+                    properties = @{
+                        version = 'fake version'
+                        dependencies = ''
+                        owners = 'azure-sdk'
+                    }
+                }
+            }
+        } -Verifiable
+
+        Mock Invoke-WebRequest -ParameterFilter {
+            $Uri -eq 'https://www.powershellgallery.com/api/v2/package/Az.Accounts'
+        } -MockWith {
+            @{
+                Headers = @{
+                    Location = 'Fake/Az.Accounts/Content/Location.nupkg'
+                }
+            }
+        } -Verifiable
+
+        Mock New-AzAutomationModule -ParameterFilter {
+            $Name -eq 'Az.Accounts'
+        } -MockWith {
+            $ContentLink | Should be 'Fake/Az.Accounts/Content/Location.nupkg' > $null
+        } -Verifiable
+
+        Invoke-Update-AutomationAzureModulesForAccount -OptionalParameters @{
+            ModuleVersionOverrides = '{ }'
+            AzureModuleClass = 'Az'
+        }
+
+        It 'Updates Az.Accounts module' {
+            Assert-MockCalled New-AzAutomationModule -ParameterFilter { $Name -eq 'Az.Accounts' } -Times 1 -Exactly
+        }
+
+        It 'Ignores fake AzureRM module' {
+            Assert-MockCalled New-AzAutomationModule -ParameterFilter { $Name -eq 'AzureRM.FakeAzureModule' } -Times 0 -Exactly
+        }
+
+        Assert-VerifiableMock
+    }
+
+    Context 'Az module present with ModuleClassName Az' {
+        Mock Get-AzAutomationModule {
+            @{
+                Name = 'Az.FakeAzModule'
+                Version = '1.0.0'
+                ProvisioningState = 'Succeeded'
+            }
+        } -Verifiable
+
+        Mock Invoke-RestMethod -ParameterFilter {
+            $Uri -match '%27Az\.Automation%27'
+        } -MockWith {
+            $Method | Should be 'Get' > $null
+            Assert-CorrectSearchUri -Uri $Uri -ModuleName Az.Automation
+
+            @{
+                id = 'fake Az.Automation search result id'
+            }
+        } -Verifiable
+
+        Mock Invoke-RestMethod -ParameterFilter {
+            $Uri -eq 'fake Az.Automation search result id'
+        } -MockWith {
+            $Method | Should be 'Get' > $null
+
+            @{
+                entry = @{
+                    properties = @{
+                        version = 'fake version'
+                        dependencies = 'Az.Accounts:[1.0.0]:'
+                        owners = 'azure-sdk'
+                    }
+                }
+            }
+        } -Verifiable
+
+        Mock Invoke-RestMethod -ParameterFilter {
+            $Uri -match '%27Az\.Accounts%27'
+        } -MockWith {
+            $Method | Should be 'Get' > $null
+            Assert-CorrectSearchUri -Uri $Uri -ModuleName Az.Accounts
+
+            @{
+                id = 'fake Az.Accounts search result id'
+            }
+        } -Verifiable
+
+        Mock Invoke-RestMethod -ParameterFilter {
+            $Uri -eq 'fake Az.Accounts search result id'
+        } -MockWith {
+            $Method | Should be 'Get' > $null
+
+            @{
+                entry = @{
+                    properties = @{
+                        version = 'fake version'
+                        dependencies = ''
+                        owners = 'azure-sdk'
+                    }
+                }
+            }
+        } -Verifiable
+
+        Mock Invoke-WebRequest -ParameterFilter {
+            $Uri -eq 'https://www.powershellgallery.com/api/v2/package/Az.Accounts'
+        } -MockWith {
+            @{
+                Headers = @{
+                    Location = 'Fake/Az.Accounts/Content/Location.nupkg'
+                }
+            }
+        } -Verifiable
+
+        Mock New-AzAutomationModule -ParameterFilter {
+            $Name -eq 'Az.Accounts'
+        } -MockWith {
+            $ContentLink | Should be 'Fake/Az.Accounts/Content/Location.nupkg' > $null
+        } -Verifiable
+
+        Mock Invoke-RestMethod -ParameterFilter {
+            $Uri -match '%27Az.FakeAzModule%27'
+        } -MockWith {
+            $Method | Should be 'Get' > $null
+            Assert-CorrectSearchUri -Uri $Uri -ModuleName Az.FakeAzModule
+
+            @{
+                id = 'fake FakeAzModule search result id'
+            }
+        } -Verifiable
+
+        Mock Invoke-RestMethod -ParameterFilter {
+            $Uri -eq 'fake FakeAzModule search result id'
+        } -MockWith {
+            $Method | Should be 'Get' > $null
+
+            @{
+                entry = @{
+                    properties = @{
+                        version = 'fake version'
+                        dependencies = 'Az.Accounts:[1.0.0]:'
+                        owners = 'azure-sdk'
+                    }
+                }
+            }
+        } -Verifiable
+
+        Mock Invoke-WebRequest -ParameterFilter {
+            $Uri -match 'https://www.powershellgallery.com/api/v2/package/Az.FakeAzModule'
+        } -MockWith {
+            $Uri | Should be 'https://www.powershellgallery.com/api/v2/package/Az.FakeAzModule' > $null
+
+            @{
+                Headers = @{
+                    Location = 'Fake/Az.FakeAzModule/Content/Location.nupkg'
+                }
+            }
+        } -Verifiable
+
+        Mock New-AzAutomationModule -ParameterFilter {
+            $Name -eq 'Az.FakeAzModule'
+        } -MockWith {
+            $ContentLink | Should be 'Fake/Az.FakeAzModule/Content/Location.nupkg' > $null
+        } -Verifiable
+
+        Invoke-Update-AutomationAzureModulesForAccount -OptionalParameters @{
+            ModuleVersionOverrides = '{ }'
+            AzureModuleClass = 'Az'
+        }
+
+        It 'Updates Az.Accounts module' {
+            Assert-MockCalled New-AzAutomationModule -ParameterFilter { $Name -eq 'Az.Accounts' } -Times 1 -Exactly
+        }
+
+        It 'Updates fake Az module' {
+            Assert-MockCalled New-AzAutomationModule -ParameterFilter { $Name -eq 'Az.FakeAzModule' } -Times 1 -Exactly
+        }
+
+        Assert-VerifiableMock
+    }
+
 }
