@@ -26,7 +26,6 @@ Import this runbook into your Automation account, and [start](https://docs.micro
   your runbooks use only Az modules to avoid conflicts. More information can be found in the
   [Microsoft Docs](https://docs.microsoft.com/azure/automation/az-modules) and
   issue [#5](https://github.com/microsoft/AzureAutomation-Account-Modules-Update/issues/5).
-  Avoid starting this runbook on Automation accounts that contain both AzureRM and Az modules.
 * Before starting this runbook, make sure your Automation account has an [Azure Run As account credential](https://docs.microsoft.com/azure/automation/manage-runas-account) created.
 * You can use this code as a regular PowerShell script instead of a runbook: just login to Azure
   using the [Connect-AzureRmAccount](https://docs.microsoft.com/powershell/module/azurerm.profile/connect-azurermaccount)
