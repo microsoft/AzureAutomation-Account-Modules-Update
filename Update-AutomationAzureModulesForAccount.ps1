@@ -109,9 +109,14 @@ function Login-AzureAutomation([bool] $AzModuleOnly) {
     try {
         $RunAsConnection = Get-AutomationConnection -Name "AzureRunAsConnection"
         Write-Output "Logging in to Azure ($AzureEnvironment)..."
-
+        
+        if (!$RunAsConnection.ApplicationId) {
+            $ErrorMessage = "Connection 'AzureRunAsConnection' is incompatible type."
+            throw $ErrorMessage            
+        }
+        
         if ($AzModuleOnly) {
-            Add-AzAccount `
+            Connect-AzAccount `
                 -ServicePrincipal `
                 -TenantId $RunAsConnection.TenantId `
                 -ApplicationId $RunAsConnection.ApplicationId `
@@ -131,9 +136,9 @@ function Login-AzureAutomation([bool] $AzModuleOnly) {
         }
     } catch {
         if (!$RunAsConnection) {
-            Write-Output $servicePrincipalConnection
+            $RunAsConnection | fl | Write-Output
             Write-Output $_.Exception
-            $ErrorMessage = "Connection $connectionName not found."
+            $ErrorMessage = "Connection 'AzureRunAsConnection' not found."
             throw $ErrorMessage
         }
 
