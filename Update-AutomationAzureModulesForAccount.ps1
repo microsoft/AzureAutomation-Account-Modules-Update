@@ -213,7 +213,7 @@ function Import-AutomationModule([string] $ModuleName, [bool] $UseAzModule = $fa
     }
 
 
-    $LatestModuleVersionOnGallery = (Get-ModuleDependencyAndLatestVersion $ModuleName)[0]
+    $LatestModuleVersionOnGallery = @(Get-ModuleDependencyAndLatestVersion $ModuleName)[0]
 
     $ModuleContentUrl = Get-ModuleContentUrl $ModuleName
     # Find the actual blob storage location of the module
