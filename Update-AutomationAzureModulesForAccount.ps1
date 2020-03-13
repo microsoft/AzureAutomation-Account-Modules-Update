@@ -1,4 +1,4 @@
-﻿<#
+<#
 Copyright (c) Microsoft Corporation. All rights reserved.
 Licensed under the MIT License.
 #>
@@ -116,23 +116,25 @@ function Login-AzureAutomation([bool] $AzModuleOnly) {
         }
         
         if ($AzModuleOnly) {
-            Connect-AzAccount `
+            $context = Connect-AzAccount `
                 -ServicePrincipal `
                 -TenantId $RunAsConnection.TenantId `
                 -ApplicationId $RunAsConnection.ApplicationId `
                 -CertificateThumbprint $RunAsConnection.CertificateThumbprint `
-                -Environment $AzureEnvironment
+                -Environment $AzureEnvironment `
+                -Subscription $RunAsConnection.SubscriptionId
 
-            Select-AzSubscription -SubscriptionId $RunAsConnection.SubscriptionID  | Write-Verbose
+            #Select-AzSubscription -SubscriptionId $RunAsConnection.SubscriptionID  | Write-Verbose
         } else {
-            Add-AzureRmAccount `
+            $context = Add-AzureRmAccount `
                 -ServicePrincipal `
                 -TenantId $RunAsConnection.TenantId `
                 -ApplicationId $RunAsConnection.ApplicationId `
                 -CertificateThumbprint $RunAsConnection.CertificateThumbprint `
-                -Environment $AzureEnvironment
+                -Environment $AzureEnvironment `
+                -Subscription $RunAsConnection.SubscriptionId
 
-            Select-AzureRmSubscription -SubscriptionId $RunAsConnection.SubscriptionID  | Write-Verbose
+            #Select-AzureRmSubscription -SubscriptionId $RunAsConnection.SubscriptionID  | Write-Verbose
         }
     } catch {
         if (!$RunAsConnection) {
@@ -224,7 +226,8 @@ function Import-AutomationModule([string] $ModuleName, [bool] $UseAzModule = $fa
     $CurrentModule = & $GetAutomationModule `
                         -Name $ModuleName `
                         -ResourceGroupName $ResourceGroupName `
-                        -AutomationAccountName $AutomationAccountName
+                        -AutomationAccountName $AutomationAccountName `
+                        -DefaultProfile $context
 
     if ($CurrentModule.Version -eq $LatestModuleVersionOnGallery) {
         Write-Output "Module : $ModuleName is already present with version $LatestModuleVersionOnGallery. Skipping Import"
@@ -235,7 +238,8 @@ function Import-AutomationModule([string] $ModuleName, [bool] $UseAzModule = $fa
             -ResourceGroupName $ResourceGroupName `
             -AutomationAccountName $AutomationAccountName `
             -Name $ModuleName `
-            -ContentLink $ModuleContentUrl > $null
+            -ContentLink $ModuleContentUrl `
+            -DefaultProfile $context > $null
     }
 }
 
@@ -313,7 +317,8 @@ function Create-ModuleImportMapOrder([bool] $AzModuleOnly) {
     # Get all the non-conflicting modules in the current automation account
     $CurrentAutomationModuleList = & $GetAutomationModule `
                                         -ResourceGroupName $ResourceGroupName `
-                                        -AutomationAccountName $AutomationAccountName |
+                                        -AutomationAccountName $AutomationAccountName `
+                                        -DefaultProfile $context |
         ?{
             ($AzModuleOnly -and ($_.Name -eq 'Az' -or $_.Name -like 'Az.*')) -or
             (!$AzModuleOnly -and ($_.Name -eq 'AzureRM' -or $_.Name -like 'AzureRM.*' -or
@@ -388,7 +393,8 @@ function Wait-AllModulesImported(
             $AutomationModule = & $GetAutomationModule `
                                     -Name $Module `
                                     -ResourceGroupName $ResourceGroupName `
-                                    -AutomationAccountName $AutomationAccountName
+                                    -AutomationAccountName $AutomationAccountName `
+                                    -DefaultProfile $context
 
             $IsTerminalProvisioningState = ($AutomationModule.ProvisioningState -eq "Succeeded") -or
                                            ($AutomationModule.ProvisioningState -eq "Failed")
