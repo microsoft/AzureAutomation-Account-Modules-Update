@@ -21,7 +21,7 @@ Import this runbook into your Automation account, and [start](https://docs.micro
   via ARM API for this Automation account. If this is not what you want, specify a different name
   when importing this runbook.
 * When you do not specify ResourceGroupName and AutomationAccountName parameters and run the code as runbook, it automatically detects automation account it's running in, and updates modules just in that automation account
-  * For this to happen, Lofin parameter must be set to True (default)
+  * For this to happen, Login parameter must be set to True (default)
 * **Azure** and **AzureRM.\*** modules are currently supported by default.
 * The new [Azure PowerShell Az modules](https://docs.microsoft.com/powershell/azure/new-azureps-module-az)
   are also supported. You **must** supply the `AzureModuleClass` runbook parameter with `Az` if
