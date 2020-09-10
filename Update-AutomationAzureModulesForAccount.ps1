@@ -321,7 +321,7 @@ function Create-ModuleImportMapOrder([bool] $AzModuleOnly) {
     $CurrentAutomationModuleList = & $GetAutomationModule `
                                         -ResourceGroupName $ResourceGroupName `
                                         -AutomationAccountName $AutomationAccountName |
-        ?{
+        Where-Object{
             ($AzModuleOnly -and ($_.Name -eq 'Az' -or $_.Name -like 'Az.*')) -or
             (!$AzModuleOnly -and ($_.Name -eq 'AzureRM' -or $_.Name -like 'AzureRM.*' -or
             $_.Name -eq 'Azure' -or $_.Name -like 'Azure.*'))
