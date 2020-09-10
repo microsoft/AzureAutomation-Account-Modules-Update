@@ -318,14 +318,26 @@ function Create-ModuleImportMapOrder([bool] $AzModuleOnly) {
     }
 
     # Get all the non-conflicting modules in the current automation account
-    $CurrentAutomationModuleList = & $GetAutomationModule `
-                                        -ResourceGroupName $ResourceGroupName `
-                                        -AutomationAccountName $AutomationAccountName |
-        Where-Object{
-            ($AzModuleOnly -and ($_.Name -eq 'Az' -or $_.Name -like 'Az.*')) -or
-            (!$AzModuleOnly -and ($_.Name -eq 'AzureRM' -or $_.Name -like 'AzureRM.*' -or
-            $_.Name -eq 'Azure' -or $_.Name -like 'Azure.*'))
-        }
+    if ($AzureModulesOnly) {
+        $CurrentAutomationModuleList = & $GetAutomationModule `
+                                            -ResourceGroupName $ResourceGroupName `
+                                            -AutomationAccountName $AutomationAccountName |
+            Where-Object{
+                ($AzModuleOnly -and ($_.Name -eq 'Az' -or $_.Name -like 'Az.*')) -or
+                (!$AzModuleOnly -and ($_.Name -eq 'AzureRM' -or $_.Name -like 'AzureRM.*' -or
+                $_.Name -eq 'Azure' -or $_.Name -like 'Azure.*'))
+            }
+    }
+    else {
+        $CurrentAutomationModuleList = & $GetAutomationModule `
+                                            -ResourceGroupName $ResourceGroupName `
+                                            -AutomationAccountName $AutomationAccountName |
+            Where-Object{
+                (!$AzModuleOnly -and !($_.Name -eq 'Az' -or $_.Name -like 'Az.*')) -or
+                ($AzModuleOnly -and !($_.Name -eq 'AzureRM' -or $_.Name -like 'AzureRM.*' -or
+                $_.Name -eq 'Azure' -or $_.Name -like 'Azure.*'))
+            }
+    }
 
     # Get the latest version of the AzureRM.Profile OR Az.Accounts module
     $VersionAndDependencies = Get-ModuleDependencyAndLatestVersion $ProfileOrAccountsModuleName
