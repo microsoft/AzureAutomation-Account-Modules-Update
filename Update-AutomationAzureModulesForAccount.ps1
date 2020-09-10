@@ -410,7 +410,8 @@ function Wait-AllModulesImported(
                                     -AutomationAccountName $AutomationAccountName
 
             $IsTerminalProvisioningState = ($AutomationModule.ProvisioningState -eq "Succeeded") -or
-                                           ($AutomationModule.ProvisioningState -eq "Failed")
+                                           ($AutomationModule.ProvisioningState -eq "Failed") -or
+                                           ($AutomationModule.ProvisioningState -eq "Created")
 
             if ($IsTerminalProvisioningState) {
                 break
