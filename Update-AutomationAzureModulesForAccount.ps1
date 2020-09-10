@@ -44,9 +44,9 @@ or
 .PARAMETER PsGalleryApiUrl
 (Optional) PowerShell Gallery API URL.
 
-.PARAMETER AzureModulesOnly
-(Optional) If $false all modules, including user added will be updated.
-If $true, only modules which are part of the Azure SDK will be updated.
+.PARAMETER UpdateAzureModulesOnly
+(Optional) If $false all modules added from PowerShell Gallery will be updated.
+If $true, only AzureRM or Az modules will be updated.
 The default value is $true.
 
 .LINK
@@ -73,7 +73,7 @@ param(
 
     [string] $PsGalleryApiUrl = 'https://www.powershellgallery.com/api/v2',
 
-    [bool] $AzureModulesOnly = $true
+    [bool] $UpdateAzureModulesOnly = $true
 )
 
 $ErrorActionPreference = "Continue"
@@ -182,7 +182,7 @@ function Get-ModuleDependencyAndLatestVersion([string] $ModuleName) {
             $PackageDetails = Invoke-RestMethod -Method Get -UseBasicParsing -Uri $SearchResult.id
 
             # Ignore the modules that are not published as part of the Azure SDK
-            if ($PackageDetails.entry.properties.Owners -ne $script:AzureSdkOwnerName -and $AzureModulesOnly) {
+            if ($PackageDetails.entry.properties.Owners -ne $script:AzureSdkOwnerName -and $UpdateAzureModulesOnly) {
                 Write-Warning "Module : $ModuleName is not part of azure sdk. Ignoring this."
             } else {
                 $ModuleVersion = $PackageDetails.entry.properties.version
@@ -318,7 +318,7 @@ function Create-ModuleImportMapOrder([bool] $AzModuleOnly) {
     }
 
     # Get all the non-conflicting modules in the current automation account
-    if ($AzureModulesOnly) {
+    if ($UpdateAzureModulesOnly) {
         $CurrentAutomationModuleList = & $GetAutomationModule `
                                             -ResourceGroupName $ResourceGroupName `
                                             -AutomationAccountName $AutomationAccountName |
