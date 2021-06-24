@@ -60,6 +60,7 @@ Describe 'Update-AutomationAzureModulesForAccount runbook' {
             -ResourceGroupName 'Fake RG' `
             -AutomationAccountName 'Fake account' `
             -Login $false `
+            -ManagedIdentity $false `
             -ErrorAction SilentlyContinue `
             -ErrorVariable script:LastErrors `
             @OptionalParameters
