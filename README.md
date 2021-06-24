@@ -26,7 +26,9 @@ Import this runbook into your Automation account, and [start](https://docs.micro
   your runbooks use only Az modules to avoid conflicts. More information can be found in the
   [Microsoft Docs](https://docs.microsoft.com/azure/automation/az-modules) and
   issue [#5](https://github.com/microsoft/AzureAutomation-Account-Modules-Update/issues/5).
-* Before starting this runbook, make sure your Automation account has an [Azure Run As account credential](https://docs.microsoft.com/azure/automation/manage-runas-account) created.
+* This script supports using either a Run As Account or a Managed Identity.
+  * For Run As make sure your Automation Account has an [Azure Run As account credential](https://docs.microsoft.com/azure/automation/manage-runas-account) created and pass in `-ManagedIdentity false`.
+  * For using a Managed Service Identity (MSI) ensure your [Automation Account has a managed identity](https://docs.microsoft.com/en-us/azure/automation/enable-managed-identity-for-automation) assigned to it pass in `-ManagedIdentity false`.  This is ONLY available if using the `Az` for `AzureModuleClass`
 * You can use this code as a regular PowerShell script instead of a runbook: just login to Azure
   using the [Connect-AzureRmAccount](https://docs.microsoft.com/powershell/module/azurerm.profile/connect-azurermaccount)
   command first, then pass `-Login $false` to the script.
