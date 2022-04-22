@@ -36,6 +36,7 @@ Import this runbook into your Automation account, and [start](https://docs.micro
 * When facing compatibility issues, you may want to use specific older module versions instead of
   the latest available on the PowerShell Gallery. In this case, provide the required versions in
   the `ModuleVersionOverrides` parameter.
+ * The runbook is available as open-source and provided as a reference to customers. In case of any runbook failures, we recommend that you modify the parameters in the runbook according to your specific needs.
 
 ## Contributing
 
