@@ -33,6 +33,9 @@ Set this to Az if your runbooks use only Az modules to avoid conflicts.
 .PARAMETER Login
 (Optional) If $false, do not login to Azure.
 
+.PARAMETER ManagedIdentity
+(Optional) If $false, leverage Run As Account; otherwise will attempt to connect as a Managed Identity.
+
 .PARAMETER ModuleVersionOverrides
 (Optional) Module versions to use instead of the latest on the PowerShell Gallery.
 If $null, the currently published latest versions will be used.
@@ -63,6 +66,8 @@ param(
     [string] $AzureEnvironment = 'AzureCloud',
 
     [bool] $Login = $true,
+
+    [bool] $ManagedIdentity = $false,
     
     [string] $ModuleVersionOverrides = $null,
     
@@ -90,9 +95,10 @@ $script:AzureSdkOwnerName = "azure-sdk"
 #region Functions
 
 function ConvertJsonDictTo-HashTable($JsonString) {
-    try{
+    try {
         $JsonObj = ConvertFrom-Json $JsonString -ErrorAction Stop
-    } catch [System.ArgumentException] {
+    }
+    catch [System.ArgumentException] {
         throw "Unable to deserialize the JSON string for parameter ModuleVersionOverrides: ", $_
     }
 
@@ -105,40 +111,50 @@ function ConvertJsonDictTo-HashTable($JsonString) {
 }
 
 # Use the Run As connection to login to Azure
-function Login-AzureAutomation([bool] $AzModuleOnly) {
+function Login-AzureAutomation([bool] $AzModuleOnly, [bool] $ManagedIdentity) {
     try {
-        $RunAsConnection = Get-AutomationConnection -Name "AzureRunAsConnection"
-        Write-Output "Logging in to Azure ($AzureEnvironment)..."
-        
-        if (!$RunAsConnection.ApplicationId) {
-            $ErrorMessage = "Connection 'AzureRunAsConnection' is incompatible type."
-            throw $ErrorMessage            
-        }
-        
-        if ($AzModuleOnly) {
-            Connect-AzAccount `
-                -ServicePrincipal `
-                -TenantId $RunAsConnection.TenantId `
-                -ApplicationId $RunAsConnection.ApplicationId `
-                -CertificateThumbprint $RunAsConnection.CertificateThumbprint `
+        if ($ManagedIdentity) {
+            Write-Output "Logging in to Azure as Managed Identity... "
+            Connect-AzAccount -Identity `
                 -Environment $AzureEnvironment
-
-            Select-AzSubscription -SubscriptionId $RunAsConnection.SubscriptionID  | Write-Verbose
-        } else {
-            Add-AzureRmAccount `
-                -ServicePrincipal `
-                -TenantId $RunAsConnection.TenantId `
-                -ApplicationId $RunAsConnection.ApplicationId `
-                -CertificateThumbprint $RunAsConnection.CertificateThumbprint `
-                -Environment $AzureEnvironment
-
-            Select-AzureRmSubscription -SubscriptionId $RunAsConnection.SubscriptionID  | Write-Verbose
         }
-    } catch {
+        else {
+            $RunAsConnection = Get-AutomationConnection -Name "AzureRunAsConnection"
+            Write-Output "Logging in to Azure ($AzureEnvironment)..."
+        
+            if (!$RunAsConnection.ApplicationId) {
+                $ErrorMessage = "Connection 'AzureRunAsConnection' is incompatible type."
+                throw $ErrorMessage            
+            }
+        
+            if ($AzModuleOnly) {
+
+                Connect-AzAccount `
+                    -ServicePrincipal `
+                    -TenantId $RunAsConnection.TenantId `
+                    -ApplicationId $RunAsConnection.ApplicationId `
+                    -CertificateThumbprint $RunAsConnection.CertificateThumbprint `
+                    -Environment $AzureEnvironment
+
+                Select-AzSubscription -SubscriptionId $RunAsConnection.SubscriptionID  | Write-Verbose
+            }
+            else {
+                Add-AzureRmAccount `
+                    -ServicePrincipal `
+                    -TenantId $RunAsConnection.TenantId `
+                    -ApplicationId $RunAsConnection.ApplicationId `
+                    -CertificateThumbprint $RunAsConnection.CertificateThumbprint `
+                    -Environment $AzureEnvironment
+
+                Select-AzureRmSubscription -SubscriptionId $RunAsConnection.SubscriptionID  | Write-Verbose
+            }
+        } 
+    }
+    catch {
         if (!$RunAsConnection) {
             $RunAsConnection | fl | Write-Output
             Write-Output $_.Exception
-            $ErrorMessage = "Connection 'AzureRunAsConnection' not found."
+            $ErrorMessage = "Connection to Azure was not able to be established."
             throw $ErrorMessage
         }
 
@@ -154,30 +170,34 @@ function Get-ModuleDependencyAndLatestVersion([string] $ModuleName) {
     $ForcedModuleVersion = $ModuleVersionOverridesHashTable[$ModuleName]
 
     $CurrentModuleUrl =
-        if ($ForcedModuleVersion) {
-            $ModuleUrlFormat -f $ModuleName, "Version%20eq%20'$ForcedModuleVersion'"
-        } else {
-            $ModuleUrlFormat -f $ModuleName, 'IsLatestVersion'
-        }
+    if ($ForcedModuleVersion) {
+        $ModuleUrlFormat -f $ModuleName, "Version%20eq%20'$ForcedModuleVersion'"
+    }
+    else {
+        $ModuleUrlFormat -f $ModuleName, 'IsLatestVersion'
+    }
 
     $SearchResult = Invoke-RestMethod -Method Get -Uri $CurrentModuleUrl -UseBasicParsing
 
     if (!$SearchResult) {
         Write-Verbose "Could not find module $ModuleName on PowerShell Gallery. This may be a module you imported from a different location. Ignoring this module"
-    } else {
+    }
+    else {
         if ($SearchResult.Length -and $SearchResult.Length -gt 1) {
             $SearchResult = $SearchResult | Where-Object { $_.title.InnerText -eq $ModuleName }
         }
 
         if (!$SearchResult) {
             Write-Verbose "Could not find module $ModuleName on PowerShell Gallery. This may be a module you imported from a different location. Ignoring this module"
-        } else {
+        }
+        else {
             $PackageDetails = Invoke-RestMethod -Method Get -UseBasicParsing -Uri $SearchResult.id
 
             # Ignore the modules that are not published as part of the Azure SDK
             if ($PackageDetails.entry.properties.Owners -ne $script:AzureSdkOwnerName) {
                 Write-Warning "Module : $ModuleName is not part of azure sdk. Ignoring this."
-            } else {
+            }
+            else {
                 $ModuleVersion = $PackageDetails.entry.properties.version
                 $Dependencies = $PackageDetails.entry.properties.dependencies
 
@@ -194,7 +214,8 @@ function Get-ModuleContentUrl($ModuleName) {
     $ForcedModuleVersion = $ModuleVersionOverridesHashTable[$ModuleName]
     if ($ForcedModuleVersion) {
         $VersionedModuleContentUrlFormat -f $ModuleName, $ForcedModuleVersion
-    } else {
+    }
+    else {
         $ModuleContentUrlFormat -f $ModuleName
     }
 }
@@ -207,7 +228,8 @@ function Import-AutomationModule([string] $ModuleName, [bool] $UseAzModule = $fa
     if ($UseAzModule) {
         $GetAutomationModule = $script:GetAzAutomationModule
         $NewAutomationModule = $script:NewAzAutomationModule
-    } else {
+    }
+    else {
         $GetAutomationModule = $script:GetAzureRmAutomationModule
         $NewAutomationModule = $script:NewAzureRmAutomationModule
     }
@@ -222,13 +244,14 @@ function Import-AutomationModule([string] $ModuleName, [bool] $UseAzModule = $fa
     } while (!$ModuleContentUrl.Contains(".nupkg"))
 
     $CurrentModule = & $GetAutomationModule `
-                        -Name $ModuleName `
-                        -ResourceGroupName $ResourceGroupName `
-                        -AutomationAccountName $AutomationAccountName
+        -Name $ModuleName `
+        -ResourceGroupName $ResourceGroupName `
+        -AutomationAccountName $AutomationAccountName
 
     if ($CurrentModule.Version -eq $LatestModuleVersionOnGallery) {
         Write-Output "Module : $ModuleName is already present with version $LatestModuleVersionOnGallery. Skipping Import"
-    } else {
+    }
+    else {
         Write-Output "Importing $ModuleName module of version $LatestModuleVersionOnGallery to Automation"
 
         & $NewAutomationModule `
@@ -245,13 +268,13 @@ function GetModuleNameAndVersionFromPowershellGalleryDependencyFormat([string] $
         throw "Improper dependency format"
     }
 
-    $Tokens = $Dependency -split":"
+    $Tokens = $Dependency -split ":"
     if ($Tokens.Count -ne 3) {
         throw "Improper dependency format"
     }
 
     $ModuleName = $Tokens[0]
-    $ModuleVersion = $Tokens[1].Trim("[","]")
+    $ModuleVersion = $Tokens[1].Trim("[", "]")
 
     @($ModuleName, $ModuleVersion)
 }
@@ -276,7 +299,7 @@ function AreAllModulesAdded([string[]] $ModuleListToAdd) {
         # so we want to completely ignore version specifications here.
         $ModuleNameToAdd = $ModuleToAdd -replace '\:.*', ''
             
-        foreach($AlreadyIncludedModules in $ModuleImportMapOrder) {
+        foreach ($AlreadyIncludedModules in $ModuleImportMapOrder) {
             if ($AlreadyIncludedModules -contains $ModuleNameToAdd) {
                 $ModuleAccounted = $true
                 break
@@ -305,27 +328,28 @@ function Create-ModuleImportMapOrder([bool] $AzModuleOnly) {
     if ($AzModuleOnly) {
         $ProfileOrAccountsModuleName = $script:AzAccountsModuleName
         $GetAutomationModule = $script:GetAzAutomationModule
-    } else {
+    }
+    else {
         $ProfileOrAccountsModuleName = $script:AzureRmProfileModuleName
         $GetAutomationModule = $script:GetAzureRmAutomationModule
     }
 
     # Get all the non-conflicting modules in the current automation account
     $CurrentAutomationModuleList = & $GetAutomationModule `
-                                        -ResourceGroupName $ResourceGroupName `
-                                        -AutomationAccountName $AutomationAccountName |
-        ?{
-            ($AzModuleOnly -and ($_.Name -eq 'Az' -or $_.Name -like 'Az.*')) -or
-            (!$AzModuleOnly -and ($_.Name -eq 'AzureRM' -or $_.Name -like 'AzureRM.*' -or
-            $_.Name -eq 'Azure' -or $_.Name -like 'Azure.*'))
-        }
+        -ResourceGroupName $ResourceGroupName `
+        -AutomationAccountName $AutomationAccountName |
+    ? {
+        ($AzModuleOnly -and ($_.Name -eq 'Az' -or $_.Name -like 'Az.*')) -or
+        (!$AzModuleOnly -and ($_.Name -eq 'AzureRM' -or $_.Name -like 'AzureRM.*' -or
+                $_.Name -eq 'Azure' -or $_.Name -like 'Azure.*'))
+    }
 
     # Get the latest version of the AzureRM.Profile OR Az.Accounts module
     $VersionAndDependencies = Get-ModuleDependencyAndLatestVersion $ProfileOrAccountsModuleName
 
     $ModuleEntry = $ProfileOrAccountsModuleName
-    $ModuleEntryArray = ,$ModuleEntry
-    $ModuleImportMapOrder += ,$ModuleEntryArray
+    $ModuleEntryArray = , $ModuleEntry
+    $ModuleImportMapOrder += , $ModuleEntryArray
 
     do {
         $NextAutomationModuleList = $null
@@ -347,17 +371,18 @@ function Create-ModuleImportMapOrder([bool] $AzModuleOnly) {
             # If the previous list contains all the dependencies then add it to current list
             if ((-not $Dependencies) -or (AreAllModulesAdded $Dependencies)) {
                 Write-Verbose "Adding module $Name to dependency chain"
-                $CurrentChainVersion += ,$AzureModuleEntry
-            } else {
+                $CurrentChainVersion += , $AzureModuleEntry
+            }
+            else {
                 # else add it back to the main loop variable list if not already added
                 if (!(AreAllModulesAdded $AzureModuleEntry)) {
                     Write-Verbose "Module $Name does not have all dependencies added as yet. Moving module for later import"
-                    $NextAutomationModuleList += ,$Module
+                    $NextAutomationModuleList += , $Module
                 }
             }
         }
 
-        $ModuleImportMapOrder += ,$CurrentChainVersion
+        $ModuleImportMapOrder += , $CurrentChainVersion
         $CurrentAutomationModuleList = $NextAutomationModuleList
 
     } while ($null -ne $CurrentAutomationModuleList)
@@ -367,13 +392,14 @@ function Create-ModuleImportMapOrder([bool] $AzModuleOnly) {
 
 # Wait and confirm that all the modules in the list have been imported successfully in Azure Automation
 function Wait-AllModulesImported(
-            [Collections.Generic.List[string]] $ModuleList,
-            [int] $Count,
-            [bool] $UseAzModule = $false) {
+    [Collections.Generic.List[string]] $ModuleList,
+    [int] $Count,
+    [bool] $UseAzModule = $false) {
 
     $GetAutomationModule = if ($UseAzModule) {
         $script:GetAzAutomationModule
-    } else {
+    }
+    else {
         $script:GetAzureRmAutomationModule
     }
 
@@ -386,12 +412,12 @@ function Wait-AllModulesImported(
         Write-Output ("Checking import Status for module : {0}" -f $Module)
         while ($true) {
             $AutomationModule = & $GetAutomationModule `
-                                    -Name $Module `
-                                    -ResourceGroupName $ResourceGroupName `
-                                    -AutomationAccountName $AutomationAccountName
+                -Name $Module `
+                -ResourceGroupName $ResourceGroupName `
+                -AutomationAccountName $AutomationAccountName
 
             $IsTerminalProvisioningState = ($AutomationModule.ProvisioningState -eq "Succeeded") -or
-                                           ($AutomationModule.ProvisioningState -eq "Failed")
+            ($AutomationModule.ProvisioningState -eq "Failed")
 
             if ($IsTerminalProvisioningState) {
                 break
@@ -403,7 +429,8 @@ function Wait-AllModulesImported(
 
         if ($AutomationModule.ProvisioningState -ne "Succeeded") {
             Write-Error ("Failed to import module : {0}. Status : {1}" -f $Module, $AutomationModule.ProvisioningState)                
-        } else {
+        }
+        else {
             Write-Output ("Successfully imported module : {0}" -f $Module)
         }
     }               
@@ -414,7 +441,7 @@ function Wait-AllModulesImported(
 # from the previous element have been added.
 function Import-ModulesInAutomationAccordingToDependency([string[][]] $ModuleImportMapOrder, [bool] $UseAzModule) {
 
-    foreach($ModuleList in $ModuleImportMapOrder) {
+    foreach ($ModuleList in $ModuleImportMapOrder) {
         $i = 0
         Write-Output "Importing Array of modules : $ModuleList"
         foreach ($Module in $ModuleList) {
@@ -480,7 +507,8 @@ function Update-ProfileAndAutomationVersionToLatest([string] $AutomationModuleNa
 
 if ($ModuleVersionOverrides) {
     $ModuleVersionOverridesHashTable = ConvertJsonDictTo-HashTable $ModuleVersionOverrides
-} else {
+}
+else {
     $ModuleVersionOverridesHashTable = @{}
 }
 
@@ -492,18 +520,20 @@ $AutomationModuleName = $null
 if ($AzureModuleClass -eq "Az") {
     $UseAzModule = $true
     $AutomationModuleName = $script:AzAutomationModuleName
-} elseif ( $AzureModuleClass -eq "AzureRM") {
+}
+elseif ( $AzureModuleClass -eq "AzureRM") {
     $UseAzModule = $false
     $AutomationModuleName = $script:AzureRMAutomationModuleName
-} else {
-     Write-Error "Invalid AzureModuleClass: '$AzureModuleClass'. Must be either Az or AzureRM" -ErrorAction Stop
+}
+else {
+    Write-Error "Invalid AzureModuleClass: '$AzureModuleClass'. Must be either Az or AzureRM" -ErrorAction Stop
 }
 
 # Import the latest version of the Az automation and accounts version to the local sandbox
 Update-ProfileAndAutomationVersionToLatest $AutomationModuleName
 
 if ($Login) {
-    Login-AzureAutomation $UseAzModule
+    Login-AzureAutomation $UseAzModule $ManagedIdentity
 }
 
 $ModuleImportMapOrder = Create-ModuleImportMapOrder $UseAzModule
