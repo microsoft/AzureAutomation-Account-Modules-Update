@@ -44,6 +44,11 @@ or
 .PARAMETER PsGalleryApiUrl
 (Optional) PowerShell Gallery API URL.
 
+.PARAMETER UpdateAzureModulesOnly
+(Optional) If $false all modules added from PowerShell Gallery will be updated.
+If $true, only AzureRM or Az modules will be updated.
+The default value is $true.
+
 .LINK
 https://docs.microsoft.com/en-us/azure/automation/automation-update-azure-modules
 #>
@@ -63,10 +68,12 @@ param(
     [string] $AzureEnvironment = 'AzureCloud',
 
     [bool] $Login = $true,
-    
+
     [string] $ModuleVersionOverrides = $null,
-    
-    [string] $PsGalleryApiUrl = 'https://www.powershellgallery.com/api/v2'
+
+    [string] $PsGalleryApiUrl = 'https://www.powershellgallery.com/api/v2',
+
+    [bool] $UpdateAzureModulesOnly = $true
 )
 
 $ErrorActionPreference = "Continue"
@@ -109,12 +116,12 @@ function Login-AzureAutomation([bool] $AzModuleOnly) {
     try {
         $RunAsConnection = Get-AutomationConnection -Name "AzureRunAsConnection"
         Write-Output "Logging in to Azure ($AzureEnvironment)..."
-        
+
         if (!$RunAsConnection.ApplicationId) {
             $ErrorMessage = "Connection 'AzureRunAsConnection' is incompatible type."
-            throw $ErrorMessage            
+            throw $ErrorMessage
         }
-        
+
         if ($AzModuleOnly) {
             Connect-AzAccount `
                 -ServicePrincipal `
@@ -136,7 +143,7 @@ function Login-AzureAutomation([bool] $AzModuleOnly) {
         }
     } catch {
         if (!$RunAsConnection) {
-            $RunAsConnection | fl | Write-Output
+            $RunAsConnection | Format-List | Write-Output
             Write-Output $_.Exception
             $ErrorMessage = "Connection 'AzureRunAsConnection' not found."
             throw $ErrorMessage
@@ -150,7 +157,7 @@ function Login-AzureAutomation([bool] $AzModuleOnly) {
 function Get-ModuleDependencyAndLatestVersion([string] $ModuleName) {
 
     $ModuleUrlFormat = "$PsGalleryApiUrl/Search()?`$filter={1}&searchTerm=%27{0}%27&targetFramework=%27%27&includePrerelease=false&`$skip=0&`$top=40"
-        
+
     $ForcedModuleVersion = $ModuleVersionOverridesHashTable[$ModuleName]
 
     $CurrentModuleUrl =
@@ -175,7 +182,7 @@ function Get-ModuleDependencyAndLatestVersion([string] $ModuleName) {
             $PackageDetails = Invoke-RestMethod -Method Get -UseBasicParsing -Uri $SearchResult.id
 
             # Ignore the modules that are not published as part of the Azure SDK
-            if ($PackageDetails.entry.properties.Owners -ne $script:AzureSdkOwnerName) {
+            if ($PackageDetails.entry.properties.Owners -ne $script:AzureSdkOwnerName -and $UpdateAzureModulesOnly) {
                 Write-Warning "Module : $ModuleName is not part of azure sdk. Ignoring this."
             } else {
                 $ModuleVersion = $PackageDetails.entry.properties.version
@@ -218,7 +225,7 @@ function Import-AutomationModule([string] $ModuleName, [bool] $UseAzModule = $fa
     $ModuleContentUrl = Get-ModuleContentUrl $ModuleName
     # Find the actual blob storage location of the module
     do {
-        $ModuleContentUrl = (Invoke-WebRequest -Uri $ModuleContentUrl -MaximumRedirection 0 -UseBasicParsing -ErrorAction Ignore).Headers.Location 
+        $ModuleContentUrl = (Invoke-WebRequest -Uri $ModuleContentUrl -MaximumRedirection 0 -UseBasicParsing -ErrorAction Ignore).Headers.Location
     } while (!$ModuleContentUrl.Contains(".nupkg"))
 
     $CurrentModule = & $GetAutomationModule `
@@ -275,14 +282,14 @@ function AreAllModulesAdded([string[]] $ModuleListToAdd) {
         # the ':' character. The explicit intent of this runbook is to always install the latest module versions,
         # so we want to completely ignore version specifications here.
         $ModuleNameToAdd = $ModuleToAdd -replace '\:.*', ''
-            
+
         foreach($AlreadyIncludedModules in $ModuleImportMapOrder) {
             if ($AlreadyIncludedModules -contains $ModuleNameToAdd) {
                 $ModuleAccounted = $true
                 break
             }
         }
-        
+
         if (!$ModuleAccounted) {
             $Result = $false
             break
@@ -295,7 +302,7 @@ function AreAllModulesAdded([string[]] $ModuleListToAdd) {
 # Creates a module import map. This is a 2D array of strings so that the first
 # element in the array consist of modules with no dependencies.
 # The second element only depends on the modules in the first element, the
-# third element only dependes on modules in the first and second and so on. 
+# third element only dependes on modules in the first and second and so on.
 function Create-ModuleImportMapOrder([bool] $AzModuleOnly) {
     $ModuleImportMapOrder = $null
     $ProfileOrAccountsModuleName = $null
@@ -311,14 +318,26 @@ function Create-ModuleImportMapOrder([bool] $AzModuleOnly) {
     }
 
     # Get all the non-conflicting modules in the current automation account
-    $CurrentAutomationModuleList = & $GetAutomationModule `
-                                        -ResourceGroupName $ResourceGroupName `
-                                        -AutomationAccountName $AutomationAccountName |
-        ?{
-            ($AzModuleOnly -and ($_.Name -eq 'Az' -or $_.Name -like 'Az.*')) -or
-            (!$AzModuleOnly -and ($_.Name -eq 'AzureRM' -or $_.Name -like 'AzureRM.*' -or
-            $_.Name -eq 'Azure' -or $_.Name -like 'Azure.*'))
-        }
+    if ($UpdateAzureModulesOnly) {
+        $CurrentAutomationModuleList = & $GetAutomationModule `
+                                            -ResourceGroupName $ResourceGroupName `
+                                            -AutomationAccountName $AutomationAccountName |
+            Where-Object{
+                ($AzModuleOnly -and ($_.Name -eq 'Az' -or $_.Name -like 'Az.*')) -or
+                (!$AzModuleOnly -and ($_.Name -eq 'AzureRM' -or $_.Name -like 'AzureRM.*' -or
+                $_.Name -eq 'Azure' -or $_.Name -like 'Azure.*'))
+            }
+    }
+    else {
+        $CurrentAutomationModuleList = & $GetAutomationModule `
+                                            -ResourceGroupName $ResourceGroupName `
+                                            -AutomationAccountName $AutomationAccountName |
+            Where-Object{
+                (!$AzModuleOnly -and !($_.Name -eq 'Az' -or $_.Name -like 'Az.*')) -or
+                ($AzModuleOnly -and !($_.Name -eq 'AzureRM' -or $_.Name -like 'AzureRM.*' -or
+                $_.Name -eq 'Azure' -or $_.Name -like 'Azure.*'))
+            }
+    }
 
     # Get the latest version of the AzureRM.Profile OR Az.Accounts module
     $VersionAndDependencies = Get-ModuleDependencyAndLatestVersion $ProfileOrAccountsModuleName
@@ -330,7 +349,7 @@ function Create-ModuleImportMapOrder([bool] $AzModuleOnly) {
     do {
         $NextAutomationModuleList = $null
         $CurrentChainVersion = $null
-        # Add it to the list if the modules are not available in the same list 
+        # Add it to the list if the modules are not available in the same list
         foreach ($Module in $CurrentAutomationModuleList) {
             $Name = $Module.Name
 
@@ -391,7 +410,8 @@ function Wait-AllModulesImported(
                                     -AutomationAccountName $AutomationAccountName
 
             $IsTerminalProvisioningState = ($AutomationModule.ProvisioningState -eq "Succeeded") -or
-                                           ($AutomationModule.ProvisioningState -eq "Failed")
+                                           ($AutomationModule.ProvisioningState -eq "Failed") -or
+                                           ($AutomationModule.ProvisioningState -eq "Created")
 
             if ($IsTerminalProvisioningState) {
                 break
@@ -402,14 +422,14 @@ function Wait-AllModulesImported(
         }
 
         if ($AutomationModule.ProvisioningState -ne "Succeeded") {
-            Write-Error ("Failed to import module : {0}. Status : {1}" -f $Module, $AutomationModule.ProvisioningState)                
+            Write-Error ("Failed to import module : {0}. Status : {1}" -f $Module, $AutomationModule.ProvisioningState)
         } else {
             Write-Output ("Successfully imported module : {0}" -f $Module)
         }
-    }               
+    }
 }
 
-# Uses the module import map created to import modules. 
+# Uses the module import map created to import modules.
 # It will only import modules from an element in the array if all the modules
 # from the previous element have been added.
 function Import-ModulesInAutomationAccordingToDependency([string[][]] $ModuleImportMapOrder, [bool] $UseAzModule) {
@@ -437,7 +457,7 @@ function Import-ModulesInAutomationAccordingToDependency([string[][]] $ModuleImp
 }
 
 function Update-ProfileAndAutomationVersionToLatest([string] $AutomationModuleName) {
-    # Get the latest azure automation module version 
+    # Get the latest azure automation module version
     $VersionAndDependencies = Get-ModuleDependencyAndLatestVersion $AutomationModuleName
 
     # Automation only has dependency on profile
