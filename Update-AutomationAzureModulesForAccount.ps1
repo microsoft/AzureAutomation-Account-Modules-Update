@@ -50,10 +50,10 @@ https://docs.microsoft.com/en-us/azure/automation/automation-update-azure-module
 
 [Diagnostics.CodeAnalysis.SuppressMessageAttribute("PSUseApprovedVerbs", "")]
 param(
-    [Parameter(Mandatory = $true)]
+    [Parameter(Mandatory = $false)]
     [string] $ResourceGroupName,
 
-    [Parameter(Mandatory = $true)]
+    [Parameter(Mandatory = $false)]
     [string] $AutomationAccountName,
 
     [int] $SimultaneousModuleImportJobCount = 10,
@@ -102,6 +102,28 @@ function ConvertJsonDictTo-HashTable($JsonString) {
     }
 
     $Result
+}
+
+#Gets information abou automation account we're running in
+Function Get-Self([bool] $AzModuleOnly)
+{
+    $job = $null
+    if($AzModuleOnly) {
+        $accounts = @(Get-AzAutomationAccount -ErrorAction SilentlyContinue)
+        foreach($acct in $accounts)
+        {
+            $job = Get-AzAutomationJob -ResourceGroupName $acct.ResourceGroupName -AutomationAccountName $acct.AutomationAccountName -Id $PSPrivateMetadata.JobId.Guid -ErrorAction SilentlyContinue
+            if ($null -ne $job) { Break; }
+        }
+    } else {
+        $accounts = @(Get-AzureRmAutomationAccount -ErrorAction SilentlyContinue)
+        foreach($account in $accounts)
+        {
+            $job = Get-AzureRmAutomationJob  -ResourceGroupName $acct.ResourceGroupName -AutomationAccountName $acct.AutomationAccountName -Id $PSPrivateMetadata.JobId.Guid -ErrorAction SilentlyContinue
+            if ($null -ne $job) { Break; }
+        }
+    }
+    $job
 }
 
 # Use the Run As connection to login to Azure
@@ -504,6 +526,21 @@ Update-ProfileAndAutomationVersionToLatest $AutomationModuleName
 
 if ($Login) {
     Login-AzureAutomation $UseAzModule
+}
+
+if([string]::IsNullOrEmpty($ResourceGroupName) -or [string]::IsNullOrEmpty($AutomationAccountName)) {
+    if($Login) {
+        $job = Get-Self -AzModuleOnly $UseAzModule
+        if ($null -ne $job) {
+            $ResourceGroupName = $job.ResourceGroupName
+            $AutomationAccountName = $job.AutomationAccountName
+        } else {
+            throw "Unable to automatically get RG and Automation account name"
+        }
+    }
+    else {
+        throw "You must specify RG name and automation account name when you do no want to login"
+    }
 }
 
 $ModuleImportMapOrder = Create-ModuleImportMapOrder $UseAzModule
