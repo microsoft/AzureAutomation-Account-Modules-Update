@@ -1,4 +1,4 @@
-﻿<#
+<#
 Copyright (c) Microsoft Corporation. All rights reserved.
 Licensed under the MIT License.
 #>
@@ -11,7 +11,7 @@ Update Azure PowerShell modules in an Azure Automation account.
 This Azure Automation runbook updates Azure PowerShell modules imported into an
 Azure Automation account with the module versions published to the PowerShell Gallery.
 
-Prerequisite: an Azure Automation account with an Azure Run As account credential.
+Prerequisite: an Azure Automation account with Managed Identity Enabled.
 
 .PARAMETER ResourceGroupName
 The Azure resource group name.
@@ -55,6 +55,9 @@ param(
 
     [Parameter(Mandatory = $true)]
     [string] $AutomationAccountName,
+
+    [Parameter(Mandatory = $true)]
+    [string] $SubscriptionId,
 
     [int] $SimultaneousModuleImportJobCount = 10,
 
@@ -107,41 +110,26 @@ function ConvertJsonDictTo-HashTable($JsonString) {
 # Use the Run As connection to login to Azure
 function Login-AzureAutomation([bool] $AzModuleOnly) {
     try {
-        $RunAsConnection = Get-AutomationConnection -Name "AzureRunAsConnection"
         Write-Output "Logging in to Azure ($AzureEnvironment)..."
         
-        if (!$RunAsConnection.ApplicationId) {
-            $ErrorMessage = "Connection 'AzureRunAsConnection' is incompatible type."
-            throw $ErrorMessage            
-        }
-        
         if ($AzModuleOnly) {
-            Connect-AzAccount `
-                -ServicePrincipal `
-                -TenantId $RunAsConnection.TenantId `
-                -ApplicationId $RunAsConnection.ApplicationId `
-                -CertificateThumbprint $RunAsConnection.CertificateThumbprint `
-                -Environment $AzureEnvironment
+            # Ensures you do not inherit an AzContext in your runbook
+            Disable-AzContextAutosave -Scope Process
+            # Connect to Azure with system-assigned managed identity. 
+            # Please enable appropriate RBAC permissions to the system identity of this automation account. Otherwise, the runbook may fail...
+            $context = (Connect-AzAccount -Identity -Environment $AzureEnvironment).Context
 
-            Select-AzSubscription -SubscriptionId $RunAsConnection.SubscriptionID  | Write-Verbose
+            # set and store context
+            $AzureContext = Set-AzContext -SubscriptionId $SubscriptionId -ErrorAction Stop
+            Select-AzSubscription -SubscriptionId $SubscriptionId  | Write-Verbose
         } else {
-            Add-AzureRmAccount `
-                -ServicePrincipal `
-                -TenantId $RunAsConnection.TenantId `
-                -ApplicationId $RunAsConnection.ApplicationId `
-                -CertificateThumbprint $RunAsConnection.CertificateThumbprint `
-                -Environment $AzureEnvironment
-
-            Select-AzureRmSubscription -SubscriptionId $RunAsConnection.SubscriptionID  | Write-Verbose
+            # Connect to Azure with system-assigned managed identity. 
+            # Please enable appropriate RBAC permissions to the system identity of this automation account. Otherwise, the runbook may fail...
+            $context = (Connect-AzureRmAccount -Identity -Environment $AzureEnvironment).Context
+            Set-AzureRmContext -SubscriptionId $SubscriptionId -ErrorAction Stop
+            Select-AzureRmSubscription -SubscriptionId $SubscriptionId  | Write-Verbose
         }
     } catch {
-        if (!$RunAsConnection) {
-            $RunAsConnection | fl | Write-Output
-            Write-Output $_.Exception
-            $ErrorMessage = "Connection 'AzureRunAsConnection' not found."
-            throw $ErrorMessage
-        }
-
         throw $_.Exception
     }
 }
