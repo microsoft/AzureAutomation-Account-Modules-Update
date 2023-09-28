@@ -11,7 +11,7 @@ Update Azure PowerShell modules in an Azure Automation account.
 This Azure Automation runbook updates Azure PowerShell modules imported into an
 Azure Automation account with the module versions published to the PowerShell Gallery.
 
-Prerequisite: an Azure Automation account with Managed Identity Enabled.
+Prerequisite: an Azure Automation account with a System assigned Managed Identity Enabled.
 
 .PARAMETER ResourceGroupName
 The Azure resource group name.
@@ -126,7 +126,7 @@ function Login-AzureAutomation([bool] $AzModuleOnly) {
             # Connect to Azure with system-assigned managed identity. 
             # Please enable appropriate RBAC permissions to the system identity of this automation account. Otherwise, the runbook may fail...
             $context = (Connect-AzureRmAccount -Identity -Environment $AzureEnvironment).Context
-            Set-AzureRmContext -SubscriptionId $SubscriptionId -ErrorAction Stop
+            $AzureContext = Set-AzureRmContext -SubscriptionId $SubscriptionId -ErrorAction Stop
             Select-AzureRmSubscription -SubscriptionId $SubscriptionId  | Write-Verbose
         }
     } catch {
